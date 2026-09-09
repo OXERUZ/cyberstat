@@ -79,19 +79,21 @@ async function loadVoteLog(){
   return data||[];
 }
 async function adminSaveCandidate(candidate){
-  const candidateId =
-    candidate.id ||
-    `c-${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}`;
-
-  const {error}=await supabase.rpc("admin_save_candidate",{
-    p_id:candidateId,
+  const {data,error}=await supabase.rpc("admin_save_candidate",{
+    p_id:candidate.id || null,
     p_name:candidate.name,
-    p_bio:candidate.bio||"",
+    p_bio:candidate.bio || "",
     p_active:!!candidate.active,
-    p_image_url:candidate.image_url||null
+    p_image_url:candidate.image_url || null
   });
 
   if(error) throw error;
+
+  if(!data?.ok){
+    throw new Error("Nomzodni saqlash tasdiqlanmadi");
+  }
+
+  return data;
 }
 async function adminRemoveCandidate(id){
   const {error}=await supabase.rpc("admin_remove_candidate",{p_id:id});
