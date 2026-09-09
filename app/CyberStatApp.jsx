@@ -79,13 +79,18 @@ async function loadVoteLog(){
   return data||[];
 }
 async function adminSaveCandidate(candidate){
+  const candidateId =
+    candidate.id ||
+    `c-${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}`;
+
   const {error}=await supabase.rpc("admin_save_candidate",{
-    p_id:candidate.id||null,
+    p_id:candidateId,
     p_name:candidate.name,
     p_bio:candidate.bio||"",
     p_active:!!candidate.active,
     p_image_url:candidate.image_url||null
   });
+
   if(error) throw error;
 }
 async function adminRemoveCandidate(id){
