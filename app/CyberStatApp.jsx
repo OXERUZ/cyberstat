@@ -54,7 +54,7 @@ async function ensureVoterSession(){
   return data.session;
 }
 async function loadCandidates(){
-  const {data,error}=await supabase.from("candidates").select("id,name,bio,active,votes,admin_votes,created_at,updated_at").order("created_at",{ascending:true});
+const {data,error}=await supabase.from("candidates").select("id,name,bio,active,image_url,votes,admin_votes,created_at,updated_at")  
   if(error) throw error;
   return(data||[]).map(c=>({...c,adminVotes:c.admin_votes||0}));
 }
@@ -80,7 +80,11 @@ async function loadVoteLog(){
 }
 async function adminSaveCandidate(candidate){
   const {error}=await supabase.rpc("admin_save_candidate",{
-    p_id:candidate.id||null,p_name:candidate.name,p_bio:candidate.bio||"",p_active:!!candidate.active
+    p_id:candidate.id||null,
+    p_name:candidate.name,
+    p_bio:candidate.bio||"",
+    p_active:!!candidate.active,
+    p_image_url:candidate.image_url||null
   });
   if(error) throw error;
 }
@@ -804,21 +808,187 @@ function AdminCandidates({ candidates, refreshCandidates }) {
 function CandidateForm({ candidate, onCancel, onSubmit }) {
   const [name, setName] = useState(candidate?.name || "");
   const [bio, setBio] = useState(candidate?.bio || "");
+  const [imageUrl, setImageUrl] = useState(candidate?.image_url || "");
+  const [imageFile, setImageFile] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleSubmit() {
+    if (!name.trim()) return;
+
+    setUploading(true);
+    setError("");
+
+    try {
+      let finalImageUrl = imageUrl;
+
+      if (imageFile) {
+        const ext = imageFile.name.split(".").pop()?.toLowerCase() || "jpg";
+        const fileName = `${crypto.randomUUID()}.${ext}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from("candidate-images")
+          .upload(fileName, imageFile, {
+            cacheControl: "3600",
+            upsert: false,
+            contentType: imageFile.type,
+          });
+
+        if (uploadError) throw uploadError;
+
+        const { data } = supabase.storage
+          .from("candidate-images")
+          .getPublicUrl(fileName);
+
+        finalImageUrl = data.publicUrl;
+      }
+
+      await onSubmit({
+        id: candidate?.id,
+        name: name.trim(),
+        bio: bio.trim(),
+        image_url: finalImageUrl || null,
+      });
+    } catch (e) {
+      console.error(e);
+      setError(e?.message || "Rasm yuklashda xatolik yuz berdi.");
+    } finally {
+      setUploading(false);
+    }
+  }
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center px-4" style={{ background: "rgba(2,4,10,0.7)", backdropFilter: "blur(4px)" }}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center px-4"
+      style={{
+        background: "rgba(2,4,10,0.7)",
+        backdropFilter: "blur(4px)"
+      }}>
       <div className="glass rounded-2xl max-w-md w-full p-6 glow-in">
-        <h3 className="font-display font-bold text-lg mb-4" style={{ color: "#EAF4FF" }}>{candidate ? "Nomzodni tahrirlash" : "Yangi nomzod"}</h3>
-        <label className="text-xs font-display block mb-1.5" style={{ color: "#7C8AA8" }}>ISM</label>
-        <input value={name} onChange={(e) => setName(e.target.value)} className="w-full rounded-lg px-3 py-2.5 mb-4 text-sm"
-          style={{ background: "rgba(120,160,255,0.06)", border: "1px solid rgba(120,160,255,0.2)", color: "#EAF4FF" }} />
-        <label className="text-xs font-display block mb-1.5" style={{ color: "#7C8AA8" }}>QISQA MA'LUMOT</label>
-        <textarea value={bio} onChange={(e) => setBio(e.target.value)} rows={3} className="w-full rounded-lg px-3 py-2.5 mb-6 text-sm resize-none"
-          style={{ background: "rgba(120,160,255,0.06)", border: "1px solid rgba(120,160,255,0.2)", color: "#EAF4FF" }} />
+        <h3
+          className="font-display font-bold text-lg mb-4"
+          style={{ color: "#EAF4FF" }}
+        >
+          {candidate ? "Nomzodni tahrirlash" : "Yangi nomzod"}
+        </h3>
+
+        <div className="flex justify-center mb-5">
+          <div
+            className="w-28 h-28 rounded-full overflow-hidden flex items-center justify-center"
+            style={{
+              background: "rgba(120,160,255,0.08)",
+              border: "1px solid rgba(120,160,255,0.25)"
+            }}
+          >
+            {imageUrl ? (
+              <img
+                src={imageUrl}
+                alt="Nomzod rasmi"
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <span
+                className="text-3xl font-bold"
+                style={{ color: "#7C8AA8" }}
+              >
+                ?
+              </span>
+            )}
+          </div>
+        </div>
+
+        <label
+          className="text-xs font-display block mb-1.5"
+          style={{ color: "#7C8AA8" }}
+        >
+          NOMZOD RASMI
+        </label>
+
+        <input
+          type="file"
+          accept="image/png,image/jpeg,image/webp"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (!file) return;
+
+            if (file.size > 5 * 1024 * 1024) {
+              setError("Rasm hajmi 5 MB dan oshmasligi kerak.");
+              return;
+            }
+
+            setImageFile(file);
+            setImageUrl(URL.createObjectURL(file));
+            setError("");
+          }}
+          className="w-full mb-4 text-sm"
+          style={{ color: "#C9DBFF" }}
+        />
+
+        <label
+          className="text-xs font-display block mb-1.5"
+          style={{ color: "#7C8AA8" }}
+        >
+          ISM
+        </label>
+
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          className="w-full rounded-lg px-3 py-2.5 mb-4 text-sm"
+          style={{
+            background: "rgba(120,160,255,0.06)",
+            border: "1px solid rgba(120,160,255,0.2)",
+            color: "#EAF4FF"
+          }}
+        />
+
+        <label
+          className="text-xs font-display block mb-1.5"
+          style={{ color: "#7C8AA8" }}
+        >
+          QISQA MA'LUMOT
+        </label>
+
+        <textarea
+          value={bio}
+          onChange={(e) => setBio(e.target.value)}
+          rows={3}
+          className="w-full rounded-lg px-3 py-2.5 mb-4 text-sm resize-none"
+          style={{
+            background: "rgba(120,160,255,0.06)",
+            border: "1px solid rgba(120,160,255,0.2)",
+            color: "#EAF4FF"
+          }}
+        />
+
+        {error && (
+          <div
+            className="rounded-lg p-3 mb-4 text-sm"
+            style={{
+              background: "rgba(255,80,80,0.08)",
+              border: "1px solid rgba(255,80,80,0.25)",
+              color: "#ff8b8b"
+            }}
+          >
+            {error}
+          </div>
+        )}
+
         <div className="flex gap-3">
-          <button onClick={onCancel} className="ghost-btn font-display flex-1 py-2.5 rounded-lg text-sm">BEKOR QILISH</button>
           <button
-            onClick={() => name.trim() && onSubmit({ id: candidate?.id, name: name.trim(), bio: bio.trim() })}
-            className="neon-btn font-display flex-1 py-2.5 rounded-lg text-sm">SAQLASH</button>
+            onClick={onCancel}
+            disabled={uploading}
+            className="ghost-btn font-display flex-1 py-2.5 rounded-lg text-sm"
+          >
+            BEKOR QILISH
+          </button>
+
+          <button
+            onClick={handleSubmit}
+            disabled={uploading || !name.trim()}
+            className="neon-btn font-display flex-1 py-2.5 rounded-lg text-sm"
+          >
+            {uploading ? "YUKLANMOQDA..." : "SAQLASH"}
+          </button>
         </div>
       </div>
     </div>
