@@ -509,10 +509,25 @@ function VotePage({ candidates, totalVotes, settings, votedFor, onVote }) {
                 <span className="font-display text-xs tracking-[0.1em]" style={{ color: "#5FE8FF" }}>NOMZOD #{String(i + 1).padStart(2, "0")}</span>
                 {isMine && <span className="text-[11px] font-display flex items-center gap-1" style={{ color: "#33FFB0" }}><Check size={12} /> SIZNING OVOZINGIZ</span>}
               </div>
-              <div className="rounded-xl mb-4 aspect-[4/3] flex items-center justify-center font-display font-bold text-4xl"
-                style={{ background: "linear-gradient(135deg, rgba(0,224,255,0.10), rgba(139,92,255,0.12))", color: "rgba(220,235,255,0.35)", border: "1px solid rgba(120,160,255,0.14)" }}>
-                {c.name.split("#")[1] ? `#${c.name.split("#")[1]}` : c.name[0]}
-              </div>
+<div
+  className="rounded-xl mb-4 aspect-[4/3] overflow-hidden flex items-center justify-center"
+  style={{
+    background: "linear-gradient(135deg, rgba(0,224,255,0.10), rgba(139,92,255,0.12))",
+    border: "1px solid rgba(120,160,255,0.14)"
+  }}
+>
+  {c.image_url ? (
+    <img
+      src={c.image_url}
+      alt={c.name}
+      className="w-full h-full object-cover"
+    />
+  ) : (
+    <span className="font-display font-bold text-4xl" style={{ color: "rgba(220,235,255,0.35)" }}>
+      {c.name.split("#")[1] ? `#${c.name.split("#")[1]}` : c.name[0]}
+    </span>
+  )}
+</div>
               <h3 className="font-display font-bold text-lg mb-1.5" style={{ color: "#EAF4FF" }}>{c.name}</h3>
               <p className="text-sm mb-4 leading-relaxed flex-1" style={{ color: "#8C9BC0" }}>{c.bio}</p>
               <div className="flex items-center justify-between text-xs font-display mb-1.5" style={{ color: "#6E7EA0" }}>
