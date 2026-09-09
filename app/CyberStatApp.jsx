@@ -4,9 +4,10 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from "react"
 import {
   Zap, Users, BarChart3, ShieldCheck, ChevronRight, X, Check,
   Lock, Unlock, Plus, Minus, Trash2, Pencil, History, Settings,
-  LayoutDashboard, Vote, Link2, ArrowLeft, TrendingUp, RadioTower,
+  LayoutDashboard, Vote, ArrowLeft, TrendingUp, RadioTower, RotateCcw, Download,
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
+import { supabase } from "../lib/supabase";
 
 /* ============================================================
    CYBERSTAT — raqamli ovoz berish platformasi
@@ -44,31 +45,70 @@ function nowStr() {
   return `${p(d.getDate())}.${p(d.getMonth() + 1)}.${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
-/* ---------------- storage helpers (best-effort, in-memory fallback) ---------------- */
-const memFallback = {};
-async function sGet(key, shared) {
-  try {
-    const r = await window.storage.get(key, shared);
-    return r ? JSON.parse(r.value) : null;
-  } catch {
-    return memFallback[key] ?? null;
-  }
+/* ---------------- Supabase data layer ---------------- */
+async function ensureVoterSession(){
+  const {data:{session}}=await supabase.auth.getSession();
+  if(session) return session;
+  const {data,error}=await supabase.auth.signInAnonymously();
+  if(error) throw error;
+  return data.session;
 }
-async function sSet(key, value, shared) {
-  memFallback[key] = value;
-  try {
-    await window.storage.set(key, JSON.stringify(value), shared);
-  } catch {
-    /* fallback already updated in memory */
-  }
+async function loadCandidates(){
+  const {data,error}=await supabase.from("candidates").select("id,name,bio,active,votes,admin_votes,created_at,updated_at").order("created_at",{ascending:true});
+  if(error) throw error;
+  return(data||[]).map(c=>({...c,adminVotes:c.admin_votes||0}));
+}
+async function loadSettings(){
+  const {data,error}=await supabase.from("survey_settings").select("project_name,tagline,organizer_name,organizer_text,status,votes_per_user,show_results,updated_at").eq("id",1).single();
+  if(error) throw error;
+  return{projectName:data.project_name,tagline:data.tagline,organizerName:data.organizer_name,organizerText:data.organizer_text,status:data.status,votesPerUser:data.votes_per_user,showResults:data.show_results};
+}
+async function loadParticipants(){
+  const {data,error}=await supabase.from("survey_stats").select("participants").eq("id",1).single();
+  if(error) throw error;
+  return data.participants;
+}
+async function loadAudit(){
+  const {data,error}=await supabase.from("audit_logs").select("id,actor,action,target,detail,created_at").order("created_at",{ascending:false}).limit(200);
+  if(error) throw error;
+  return(data||[]).map(a=>({...a,time:new Date(a.created_at).toLocaleString("uz-UZ")}));
+}
+async function loadVoteLog(){
+  const {data,error}=await supabase.from("votes").select("id,candidate_id,voter_id,created_at,candidates(name)").order("created_at",{ascending:false}).limit(500);
+  if(error) throw error;
+  return data||[];
+}
+async function adminSaveCandidate(candidate){
+  const {error}=await supabase.rpc("admin_save_candidate",{
+    p_id:candidate.id||null,p_name:candidate.name,p_bio:candidate.bio||"",p_active:!!candidate.active
+  });
+  if(error) throw error;
+}
+async function adminRemoveCandidate(id){
+  const {error}=await supabase.rpc("admin_remove_candidate",{p_id:id});
+  if(error) throw error;
+}
+async function adminAdjustVotes(candidateId,delta,reason){
+  const {error}=await supabase.rpc("admin_adjust_votes",{p_candidate_id:candidateId,p_delta:delta,p_reason:reason});
+  if(error) throw error;
+}
+async function adminSaveSettings(next){
+  const {error}=await supabase.rpc("admin_save_settings",{
+    p_project_name:next.projectName,p_tagline:next.tagline,p_status:next.status,
+    p_show_results:!!next.showResults,p_organizer_name:next.organizerName,p_organizer_text:next.organizerText
+  });
+  if(error) throw error;
+}
+async function adminResetSurvey(reason){
+  const {error}=await supabase.rpc("admin_reset_survey",{p_reason:reason});
+  if(error) throw error;
 }
 
-/* ============================================================ */
 
 export default function App() {
   const [view, setView] = useState("home"); // home | vote | results | admin
   const [candidates, setCandidates] = useState(DEFAULT_CANDIDATES);
-  const [settings, setSettings] = useState(DEFAULT_SETTINGS);
+  const [settings, setSettings] = useState({...DEFAULT_SETTINGS, organizerName:"KIBERXAVFSIZLIK MARKAZI", organizerText:"Ushbu so‘rovnoma KIBERXAVFSIZLIK MARKAZI tomonidan o‘tkazilmoqda.", showResults:true});
   const [audit, setAudit] = useState([]);
   const [participants, setParticipants] = useState(8421);
   const [votedFor, setVotedFor] = useState(null);
@@ -76,78 +116,33 @@ export default function App() {
   const [adminAuthed, setAdminAuthed] = useState(false);
   const [lastUpdate, setLastUpdate] = useState(Date.now());
 
-  // initial load + seed
-  useEffect(() => {
-    (async () => {
-      let c = await sGet(SK.candidates, true);
-      let s = await sGet(SK.settings, true);
-      let a = await sGet(SK.audit, true);
-      let p = await sGet(SK.participants, true);
-      let v = await sGet(PK.voted, false);
-
-      if (!c) { c = DEFAULT_CANDIDATES; await sSet(SK.candidates, c, true); }
-      if (!s) { s = DEFAULT_SETTINGS; await sSet(SK.settings, s, true); }
-      if (!a) { a = []; await sSet(SK.audit, a, true); }
-      if (p == null) { p = 8421; await sSet(SK.participants, p, true); }
-
-      setCandidates(c); setSettings(s); setAudit(a); setParticipants(p);
-      setVotedFor(v ? v.candidateId : null);
-      setLoaded(true);
-    })();
-  }, []);
-
-  // poll for near-real-time updates (results page / stats)
-  useEffect(() => {
-    const t = setInterval(async () => {
-      const c = await sGet(SK.candidates, true);
-      const p = await sGet(SK.participants, true);
-      const s = await sGet(SK.settings, true);
-      if (c) setCandidates(c);
-      if (p != null) setParticipants(p);
-      if (s) setSettings(s);
-      setLastUpdate(Date.now());
-    }, 4000);
-    return () => clearInterval(t);
-  }, []);
+  useEffect(()=>{(async()=>{try{const {data:{session}}=await supabase.auth.getSession();const isAdmin=!!session?.user&&session.user.app_metadata?.role==="admin";setAdminAuthed(isAdmin);const[c,st,p]=await Promise.all([loadCandidates(),loadSettings(),loadParticipants()]);setCandidates(c);setSettings(st);setParticipants(p);if(isAdmin){try{setAudit(await loadAudit());}catch(e){console.error(e);}}}catch(e){console.error(e);}finally{setLoaded(true);}})();},[]);
+  useEffect(()=>{
+    const channel=supabase.channel("cyberstat-live",{config:{broadcast:{ack:true}}})
+      .on("postgres_changes",{event:"*",schema:"public",table:"candidates"},async()=>{
+        try{setCandidates(await loadCandidates());setLastUpdate(Date.now());}catch(e){console.error(e);}
+      })
+      .on("postgres_changes",{event:"*",schema:"public",table:"survey_settings"},async()=>{
+        try{setSettings(await loadSettings());setLastUpdate(Date.now());}catch(e){console.error(e);}
+      })
+      .on("postgres_changes",{event:"*",schema:"public",table:"survey_stats"},async()=>{
+        try{setParticipants(await loadParticipants());setLastUpdate(Date.now());}catch(e){console.error(e);}
+      })
+      .on("postgres_changes",{event:"*",schema:"public",table:"audit_logs"},async()=>{
+        try{const {data:{session}}=await supabase.auth.getSession();if(session?.user?.app_metadata?.role==="admin")setAudit(await loadAudit());}catch(e){console.error(e);}
+      })
+      .subscribe();
+    return()=>{supabase.removeChannel(channel);};
+  },[]);
 
   const totalVotes = useMemo(
     () => candidates.reduce((sum, c) => sum + c.votes, 0),
     [candidates]
   );
 
-  const castVote = useCallback(async (candidateId) => {
-    if (votedFor) return;
-    if (settings.status !== "FAOL") return;
-    const fresh = (await sGet(SK.candidates, true)) || candidates;
-    const next = fresh.map((c) => c.id === candidateId ? { ...c, votes: c.votes + 1 } : c);
-    await sSet(SK.candidates, next, true);
-    setCandidates(next);
-
-    const freshP = (await sGet(SK.participants, true)) ?? participants;
-    const nextP = freshP + 1;
-    await sSet(SK.participants, nextP, true);
-    setParticipants(nextP);
-
-    await sSet(PK.voted, { candidateId, at: Date.now() }, false);
-    setVotedFor(candidateId);
-  }, [votedFor, settings.status, candidates, participants]);
-
-  const logAudit = useCallback(async (entry) => {
-    const fresh = (await sGet(SK.audit, true)) || audit;
-    const next = [{ id: uid(), time: nowStr(), ...entry }, ...fresh].slice(0, 200);
-    await sSet(SK.audit, next, true);
-    setAudit(next);
-  }, [audit]);
-
-  const saveCandidates = useCallback(async (next) => {
-    await sSet(SK.candidates, next, true);
-    setCandidates(next);
-  }, []);
-
-  const saveSettings = useCallback(async (next) => {
-    await sSet(SK.settings, next, true);
-    setSettings(next);
-  }, []);
+  const castVote=useCallback(async(candidateId)=>{if(votedFor||settings.status!=="FAOL")return;try{await ensureVoterSession();const{error}=await supabase.rpc("cast_vote",{p_candidate_id:candidateId});if(error)throw error;const[c,p]=await Promise.all([loadCandidates(),loadParticipants()]);setCandidates(c);setParticipants(p);setVotedFor(candidateId);}catch(e){if((e?.message||"").includes("ALREADY_VOTED"))setVotedFor("already-voted");else console.error(e);}},[votedFor,settings.status]);
+  const refreshCandidates=useCallback(async()=>{setCandidates(await loadCandidates());setLastUpdate(Date.now());},[]);
+  const saveSettings=useCallback(async(next)=>{await adminSaveSettings(next);setSettings(await loadSettings());setLastUpdate(Date.now());},[]);
 
   if (!loaded) {
     return (
@@ -165,7 +160,7 @@ export default function App() {
       <GlobalStyle />
       <GridBackdrop />
       {view !== "admin" && (
-        <PublicNav view={view} setView={setView} projectName={settings.projectName} />
+        <PublicNav view={view} setView={setView} projectName={settings.projectName} showResults={settings.showResults} />
       )}
 
       {view === "home" && (
@@ -186,7 +181,7 @@ export default function App() {
           onVote={castVote}
         />
       )}
-      {view === "results" && (
+      {view === "results" && settings.showResults !== false && (
         <ResultsPage
           candidates={candidates.filter((c) => c.active)}
           totalVotes={totalVotes}
@@ -199,11 +194,11 @@ export default function App() {
           authed={adminAuthed}
           setAuthed={setAdminAuthed}
           candidates={candidates}
-          saveCandidates={saveCandidates}
+          refreshCandidates={refreshCandidates}
           settings={settings}
           saveSettings={saveSettings}
           audit={audit}
-          logAudit={logAudit}
+          setAudit={setAudit}
           totalVotes={totalVotes}
           participants={participants}
           exitAdmin={() => setView("home")}
@@ -295,11 +290,11 @@ function GridBackdrop() {
 }
 
 /* ---------------- Public Nav ---------------- */
-function PublicNav({ view, setView, projectName }) {
+function PublicNav({ view, setView, projectName, showResults }) {
   const items = [
     { id: "home", label: "BOSH SAHIFA" },
     { id: "vote", label: "OVOZ BERISH" },
-    { id: "results", label: "NATIJALAR" },
+    ...(showResults !== false ? [{ id: "results", label: "NATIJALAR" }] : []),
   ];
   return (
     <div className="relative z-10 sticky top-0" style={{ backdropFilter: "blur(10px)" }}>
@@ -380,6 +375,7 @@ function Home({ settings, totalVotes, candidateCount, participants, setView }) {
   const ended = settings.status === "YAKUNLANGAN";
   return (
     <main className="relative z-10 max-w-6xl mx-auto px-5 pt-14 pb-20">
+      <div className="glass rounded-2xl px-5 py-4 mb-8" style={{border:"1px solid rgba(0,224,255,0.2)",boxShadow:"0 0 30px rgba(0,224,255,0.08)"}}><div className="flex items-start gap-3"><ShieldCheck size={22} className="mt-0.5 shrink-0" style={{color:"#33FFB0"}}/><div><p className="font-display font-bold text-sm tracking-[0.08em]" style={{color:"#5FE8FF"}}>{settings.organizerName || "KIBERXAVFSIZLIK MARKAZI"}</p><p className="text-sm mt-1" style={{color:"#C9DBFF"}}>{settings.organizerText || "Ushbu so‘rovnoma KIBERXAVFSIZLIK MARKAZI tomonidan o‘tkazilmoqda."}</p><p className="text-xs mt-1" style={{color:"#7181A4"}}>Ishtirokingiz uchun rahmat. Natijalar raqamli tizim orqali qayd etiladi.</p></div></div></div>
       <div className="grid md:grid-cols-[1.1fr_0.9fr] gap-10 items-center">
         <div className="glow-in">
           <div className="inline-flex items-center gap-2 text-xs font-display px-3 py-1.5 rounded-full mb-6"
@@ -398,9 +394,7 @@ function Home({ settings, totalVotes, candidateCount, participants, setView }) {
               className="neon-btn font-display px-6 py-3.5 rounded-lg flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed">
               OVOZ BERISHNI BOSHLASH <ChevronRight size={18} />
             </button>
-            <button onClick={() => setView("results")} className="ghost-btn font-display px-6 py-3.5 rounded-lg">
-              NATIJALARNI KO‘RISH
-            </button>
+            {settings.showResults !== false && <button onClick={() => setView("results")} className="ghost-btn font-display px-6 py-3.5 rounded-lg">NATIJALARNI KO‘RISH</button>}
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <Stat label="JAMI OVOZLAR" value={<CountUp value={totalVotes} />} />
@@ -651,53 +645,23 @@ function ResultsPage({ candidates, totalVotes, participants, lastUpdate }) {
 /* ============================================================
    ADMIN PANEL
    ============================================================ */
-const ADMIN_PASSWORD = "cyberstat2026";
+
+
+function AdminLogin({onSuccess,exitAdmin}){const[email,setEmail]=useState("");const[pwd,setPwd]=useState("");const[err,setErr]=useState("");const[busy,setBusy]=useState(false);async function login(){if(!email.trim()||!pwd)return setErr("Email va parolni kiriting.");setBusy(true);setErr("");const{error}=await supabase.auth.signInWithPassword({email:email.trim(),password:pwd});setBusy(false);if(error)return setErr("Login yoki parol noto‘g‘ri.");const{data:{user}}=await supabase.auth.getUser();if(user?.app_metadata?.role!=="admin"){await supabase.auth.signOut();return setErr("Bu hisob administrator huquqiga ega emas.");}onSuccess();}return <div className="relative z-10 min-h-[100dvh] flex items-center justify-center px-4"><div className="glass rounded-2xl p-8 max-w-sm w-full glow-in"><div className="flex items-center gap-2 mb-1"><Lock size={18} style={{color:"#00E0FF"}}/><h2 className="font-display font-bold text-xl" style={{color:"#EAF4FF"}}>Administrator kirishi</h2></div><p className="text-sm mb-6" style={{color:"#7C8AA8"}}>CYBERSTAT boshqaruv tizimi.</p><input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="Admin email" className="w-full rounded-lg px-4 py-3 mb-3 text-sm" style={{background:"rgba(120,160,255,0.06)",border:"1px solid rgba(120,160,255,0.2)",color:"#EAF4FF"}}/><input type="password" value={pwd} onChange={e=>setPwd(e.target.value)} placeholder="Admin paroli" onKeyDown={e=>e.key==='Enter'&&login()} className="w-full rounded-lg px-4 py-3 mb-3 text-sm" style={{background:"rgba(120,160,255,0.06)",border:"1px solid rgba(120,160,255,0.2)",color:"#EAF4FF"}}/>{err&&<p className="text-xs mb-3" style={{color:"#FF8FA6"}}>{err}</p>}<button onClick={login} disabled={busy} className="neon-btn font-display w-full py-3 rounded-lg mb-3 disabled:opacity-50">{busy?"TEKSHIRILMOQDA…":"KIRISH"}</button><button onClick={exitAdmin} className="ghost-btn font-display w-full py-2.5 rounded-lg text-sm flex items-center justify-center gap-2"><ArrowLeft size={14}/> Saytga qaytish</button><p className="text-[11px] mt-4 text-center" style={{color:"#4A5878"}}>Admin paroli kodda saqlanmaydi.</p></div></div>}
 
 function AdminPanel(props) {
-  const { authed, setAuthed, exitAdmin } = props;
+  const { authed, setAuthed, exitAdmin, setAudit } = props;
+  const leaveAdmin=async()=>{await supabase.auth.signOut();setAuthed(false);exitAdmin();};
   const [tab, setTab] = useState("dashboard");
-  const [pwd, setPwd] = useState("");
-  const [err, setErr] = useState("");
+  useEffect(()=>{if(authed){loadAudit().then(setAudit).catch(console.error);}},[authed,setAudit]);
 
-  if (!authed) {
-    return (
-      <div className="relative z-10 min-h-[100dvh] flex items-center justify-center px-4">
-        <div className="glass rounded-2xl p-8 max-w-sm w-full glow-in">
-          <div className="flex items-center gap-2 mb-1">
-            <Lock size={18} style={{ color: "#00E0FF" }} />
-            <h2 className="font-display font-bold text-xl" style={{ color: "#EAF4FF" }}>Boshqaruv paneli</h2>
-          </div>
-          <p className="text-sm mb-6" style={{ color: "#7C8AA8" }}>Faqat administrator kira oladi.</p>
-          <input
-            type="password" value={pwd} onChange={(e) => setPwd(e.target.value)}
-            placeholder="Admin parolini kiriting"
-            className="w-full rounded-lg px-4 py-3 mb-3 text-sm"
-            style={{ background: "rgba(120,160,255,0.06)", border: "1px solid rgba(120,160,255,0.2)", color: "#EAF4FF" }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                if (pwd === ADMIN_PASSWORD) { setAuthed(true); setErr(""); } else setErr("Parol noto‘g‘ri.");
-              }
-            }}
-          />
-          {err && <p className="text-xs mb-3" style={{ color: "#FF8FA6" }}>{err}</p>}
-          <button
-            onClick={() => { if (pwd === ADMIN_PASSWORD) { setAuthed(true); setErr(""); } else setErr("Parol noto‘g‘ri."); }}
-            className="neon-btn font-display w-full py-3 rounded-lg mb-3"
-          >KIRISH</button>
-          <button onClick={exitAdmin} className="ghost-btn font-display w-full py-2.5 rounded-lg text-sm flex items-center justify-center gap-2">
-            <ArrowLeft size={14} /> Saytga qaytish
-          </button>
-          <p className="text-[11px] mt-4 text-center" style={{ color: "#4A5878" }}>Demo parol: {ADMIN_PASSWORD}</p>
-        </div>
-      </div>
-    );
-  }
+  if (!authed) return <AdminLogin onSuccess={()=>setAuthed(true)} exitAdmin={exitAdmin} />;
 
   const navItems = [
     { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
     { id: "candidates", label: "Nomzodlar", icon: Users },
-    { id: "votes", label: "Ovoz qo‘shish", icon: Vote },
-    { id: "referrals", label: "Referallar", icon: Link2 },
+    { id: "votes", label: "Ovoz boshqaruvi", icon: Vote },
+    { id: "vote-log", label: "Ovozlar jurnali", icon: History },
     { id: "history", label: "O‘zgarishlar tarixi", icon: History },
     { id: "settings", label: "Sozlamalar", icon: Settings },
   ];
@@ -721,7 +685,7 @@ function AdminPanel(props) {
           );
         })}
         <div className="md:mt-auto flex gap-1">
-          <button onClick={exitAdmin} className="ghost-btn font-display text-sm px-3 py-2.5 rounded-lg flex items-center gap-2 whitespace-nowrap">
+          <button onClick={leaveAdmin} className="ghost-btn font-display text-sm px-3 py-2.5 rounded-lg flex items-center gap-2 whitespace-nowrap">
             <ArrowLeft size={14} /> Saytga qaytish
           </button>
         </div>
@@ -731,7 +695,7 @@ function AdminPanel(props) {
         {tab === "dashboard" && <AdminDashboard {...props} />}
         {tab === "candidates" && <AdminCandidates {...props} />}
         {tab === "votes" && <AdminVotes {...props} />}
-        {tab === "referrals" && <AdminReferrals />}
+        {tab === "vote-log" && <AdminVoteLog />}
         {tab === "history" && <AdminHistory {...props} />}
         {tab === "settings" && <AdminSettings {...props} />}
       </div>
@@ -772,73 +736,67 @@ function AdminDashboard({ candidates, totalVotes, participants, audit }) {
   );
 }
 
-function AdminCandidates({ candidates, saveCandidates, logAudit }) {
-  const [editing, setEditing] = useState(null); // candidate or "new"
+function AdminCandidates({ candidates, refreshCandidates }) {
+  const [editing, setEditing] = useState(null);
+  const [busy,setBusy]=useState(false);
+  const [msg,setMsg]=useState("");
 
   async function remove(c) {
-    await saveCandidates(candidates.filter((x) => x.id !== c.id));
-    await logAudit({ actor: "ADMIN", action: "Nomzod o‘chirildi", target: c.name, detail: "" });
+    if(!window.confirm(`“${c.name}” nomzodini o‘chirish/arxivlashni tasdiqlaysizmi?`)) return;
+    try{setBusy(true);await adminRemoveCandidate(c.id);setCandidatesAfterAdmin(setMsg);}
+    catch(e){setMsg("Amal bajarilmadi: "+(e?.message||"xatolik"));}
+    finally{setBusy(false);setTimeout(()=>setMsg(""),3500);}
   }
   async function toggle(c) {
-    await saveCandidates(candidates.map((x) => x.id === c.id ? { ...x, active: !x.active } : x));
-    await logAudit({ actor: "ADMIN", action: c.active ? "Nomzod nofaollashtirildi" : "Nomzod faollashtirildi", target: c.name, detail: "" });
+    try{setBusy(true);await adminSaveCandidate({...c,active:!c.active});await setCandidatesAfterAdmin(setMsg);}
+    catch(e){setMsg("Amal bajarilmadi: "+(e?.message||"xatolik"));}
+    finally{setBusy(false);setTimeout(()=>setMsg(""),3500);}
+  }
+  async function setCandidatesAfterAdmin(setMessage){
+    // Parent callback refreshes the shared state. Calling it with the current list
+    // also makes the update visible immediately; realtime then keeps every client synced.
+    await refreshCandidates();
+    setMessage("O‘zgarish serverga saqlandi va barcha foydalanuvchilarga tarqatildi.");
   }
   async function submitForm(data) {
-    if (data.id) {
-      await saveCandidates(candidates.map((x) => x.id === data.id ? { ...x, ...data } : x));
-      await logAudit({ actor: "ADMIN", action: "Nomzod tahrirlandi", target: data.name, detail: "" });
-    } else {
-      const nc = { id: uid(), name: data.name, bio: data.bio, active: true, votes: 0, adminVotes: 0 };
-      await saveCandidates([...candidates, nc]);
-      await logAudit({ actor: "ADMIN", action: "Yangi nomzod qo‘shildi", target: nc.name, detail: "" });
-    }
-    setEditing(null);
+    try{
+      setBusy(true);
+      await adminSaveCandidate({...data,active:data.active!==false});
+      await refreshCandidates();
+      setEditing(null);
+      setMsg("Nomzod saqlandi.");
+    }catch(e){setMsg("Saqlash amalga oshmadi: "+(e?.message||"xatolik"));}
+    finally{setBusy(false);setTimeout(()=>setMsg(""),3500);}
   }
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-2">
         <h1 className="font-display font-bold text-2xl" style={{ color: "#EAF4FF" }}>Nomzodlar</h1>
-        <button onClick={() => setEditing("new")} className="neon-btn font-display px-4 py-2.5 rounded-lg flex items-center gap-2 text-sm">
+        <button disabled={busy} onClick={() => setEditing("new")} className="neon-btn font-display px-4 py-2.5 rounded-lg flex items-center gap-2 text-sm disabled:opacity-40">
           <Plus size={16} /> Nomzod qo‘shish
         </button>
       </div>
-      <div className="glass rounded-2xl overflow-hidden">
-        <table className="w-full text-sm">
-          <thead>
-            <tr style={{ color: "#5E6E90" }} className="font-display text-left text-xs tracking-[0.08em]">
-              <th className="px-4 py-3">NOMZOD</th>
-              <th className="px-4 py-3">JAMI OVOZ</th>
-              <th className="px-4 py-3">ADMIN OVOZ</th>
-              <th className="px-4 py-3">HOLAT</th>
-              <th className="px-4 py-3">AMALLAR</th>
-            </tr>
-          </thead>
-          <tbody>
-            {candidates.map((c) => (
-              <tr key={c.id} style={{ borderTop: "1px solid rgba(120,160,255,0.1)" }}>
-                <td className="px-4 py-3">
-                  <div className="font-display font-bold" style={{ color: "#EAF4FF" }}>{c.name}</div>
-                  <div className="text-xs truncate max-w-xs" style={{ color: "#6E7EA0" }}>{c.bio}</div>
-                </td>
-                <td className="px-4 py-3" style={{ color: "#C9DBFF" }}>{fmt(c.votes)}</td>
-                <td className="px-4 py-3" style={{ color: "#C9DBFF" }}>{fmt(c.adminVotes || 0)}</td>
-                <td className="px-4 py-3">
-                  <span className="text-xs font-display" style={{ color: c.active ? "#33FFB0" : "#6E7EA0" }}>{c.active ? "FAOL" : "NOFAOL"}</span>
-                </td>
-                <td className="px-4 py-3">
-                  <div className="flex items-center gap-2">
-                    <button onClick={() => setEditing(c)} className="p-1.5 rounded-md ghost-btn"><Pencil size={14} /></button>
-                    <button onClick={() => toggle(c)} className="p-1.5 rounded-md ghost-btn">{c.active ? <Lock size={14} /> : <Unlock size={14} />}</button>
-                    <button onClick={() => remove(c)} className="p-1.5 rounded-md ghost-btn" style={{ color: "#FF8FA6" }}><Trash2 size={14} /></button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
+      <p className="text-sm mb-6" style={{color:"#6E7EA0"}}>Bu yerdagi o‘zgarishlar markaziy database'ga yoziladi va public saytga real vaqt rejimida tarqatiladi.</p>
+      {msg&&<div className="glass rounded-xl px-4 py-3 mb-4 text-sm" style={{color:msg.includes("amalga oshmadi")||msg.includes("bajarilmadi")?"#FF8FA6":"#33FFB0"}}>{msg}</div>}
+      <div className="glass rounded-2xl overflow-x-auto">
+        <table className="w-full text-sm min-w-[720px]">
+          <thead><tr style={{ color: "#5E6E90" }} className="font-display text-left text-xs tracking-[0.08em]">
+            <th className="px-4 py-3">NOMZOD</th><th className="px-4 py-3">JAMI OVOZ</th><th className="px-4 py-3">ADMIN OVOZ</th><th className="px-4 py-3">HOLAT</th><th className="px-4 py-3">AMALLAR</th>
+          </tr></thead>
+          <tbody>{candidates.map(c=><tr key={c.id} style={{borderTop:"1px solid rgba(120,160,255,0.1)"}}>
+            <td className="px-4 py-3"><div className="font-display font-bold" style={{color:"#EAF4FF"}}>{c.name}</div><div className="text-xs truncate max-w-sm" style={{color:"#6E7EA0"}}>{c.bio}</div></td>
+            <td className="px-4 py-3" style={{color:"#C9DBFF"}}>{fmt(c.votes)}</td><td className="px-4 py-3" style={{color:"#C9DBFF"}}>{fmt(c.adminVotes||0)}</td>
+            <td className="px-4 py-3"><span className="text-xs font-display" style={{color:c.active?"#33FFB0":"#6E7EA0"}}>{c.active?"FAOL":"NOFAOL"}</span></td>
+            <td className="px-4 py-3"><div className="flex items-center gap-2">
+              <button disabled={busy} onClick={()=>setEditing(c)} className="p-1.5 rounded-md ghost-btn disabled:opacity-40"><Pencil size={14}/></button>
+              <button disabled={busy} onClick={()=>toggle(c)} className="p-1.5 rounded-md ghost-btn disabled:opacity-40">{c.active?<Lock size={14}/>:<Unlock size={14}/>}</button>
+              <button disabled={busy} onClick={()=>remove(c)} className="p-1.5 rounded-md ghost-btn disabled:opacity-40" style={{color:"#FF8FA6"}}><Trash2 size={14}/></button>
+            </div></td>
+          </tr>)}</tbody>
         </table>
       </div>
-      {editing && <CandidateForm candidate={editing === "new" ? null : editing} onCancel={() => setEditing(null)} onSubmit={submitForm} />}
+      {editing&&<CandidateForm candidate={editing==="new"?null:editing} onCancel={()=>setEditing(null)} onSubmit={submitForm}/>} 
     </div>
   );
 }
@@ -867,7 +825,7 @@ function CandidateForm({ candidate, onCancel, onSubmit }) {
   );
 }
 
-function AdminVotes({ candidates, saveCandidates, logAudit }) {
+function AdminVotes({ candidates, refreshCandidates }) {
   const [candId, setCandId] = useState(candidates[0]?.id || "");
   const [amount, setAmount] = useState(100);
   const [reason, setReason] = useState("");
@@ -878,18 +836,9 @@ function AdminVotes({ candidates, saveCandidates, logAudit }) {
     const cand = candidates.find((c) => c.id === candId);
     if (!cand || amount <= 0 || !reason.trim()) return;
     const delta = mode === "add" ? amount : -amount;
-    const next = candidates.map((c) =>
-      c.id === candId
-        ? { ...c, votes: Math.max(0, c.votes + delta), adminVotes: Math.max(0, (c.adminVotes || 0) + (mode === "add" ? amount : -amount)) }
-        : c
-    );
-    await saveCandidates(next);
-    await logAudit({
-      actor: "ADMIN",
-      action: mode === "add" ? "Ovoz qo‘shildi" : "Ovoz ayirildi",
-      target: cand.name,
-      detail: `${mode === "add" ? "+" : "-"}${amount} · Sabab: ${reason.trim()}`,
-    });
+    const { error } = await supabase.rpc("admin_adjust_votes", { p_candidate_id:candId, p_delta:delta, p_reason:reason.trim() });
+    if (error) { setMsg("Amalni bajarib bo‘lmadi."); return; }
+    await refreshCandidates();
     setMsg(`${cand.name} uchun ${mode === "add" ? "+" : "-"}${amount} ovoz qo‘llandi.`);
     setReason("");
     setTimeout(() => setMsg(""), 3000);
@@ -933,43 +882,24 @@ function AdminVotes({ candidates, saveCandidates, logAudit }) {
   );
 }
 
-function AdminReferrals() {
-  // Demo/mock data — real referral tracking requires user accounts (not part of the public spec).
-  const rows = [
-    { user: "user_2481", code: "REF-2481", invited: 14, active: 9, bonus: 180 },
-    { user: "user_1027", code: "REF-1027", invited: 9, active: 6, bonus: 120 },
-    { user: "user_5590", code: "REF-5590", invited: 5, active: 3, bonus: 60 },
-  ];
-  return (
-    <div>
-      <h1 className="font-display font-bold text-2xl mb-2" style={{ color: "#EAF4FF" }}>Referallar</h1>
-      <p className="text-sm mb-6" style={{ color: "#6E7EA0" }}>Demo ma'lumot — real tizimda foydalanuvchi hisoblari asosida to‘ldiriladi.</p>
-      <div className="glass rounded-2xl overflow-hidden">
-        <table className="w-full text-sm">
-          <thead>
-            <tr style={{ color: "#5E6E90" }} className="font-display text-left text-xs tracking-[0.08em]">
-              <th className="px-4 py-3">FOYDALANUVCHI</th>
-              <th className="px-4 py-3">REFERAL KODI</th>
-              <th className="px-4 py-3">TAKLIFLAR</th>
-              <th className="px-4 py-3">FAOL REFERALLAR</th>
-              <th className="px-4 py-3">BONUS OVOZLAR</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => (
-              <tr key={r.code} style={{ borderTop: "1px solid rgba(120,160,255,0.1)" }}>
-                <td className="px-4 py-3" style={{ color: "#EAF4FF" }}>{r.user}</td>
-                <td className="px-4 py-3" style={{ color: "#5FE8FF" }}>{r.code}</td>
-                <td className="px-4 py-3" style={{ color: "#C9DBFF" }}>{r.invited}</td>
-                <td className="px-4 py-3" style={{ color: "#C9DBFF" }}>{r.active}</td>
-                <td className="px-4 py-3" style={{ color: "#C9DBFF" }}>{r.bonus}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
+function AdminVoteLog(){
+  const [rows,setRows]=useState([]);
+  const [busy,setBusy]=useState(true);
+  const [query,setQuery]=useState("");
+  useEffect(()=>{loadVoteLog().then(setRows).catch(console.error).finally(()=>setBusy(false));},[]);
+  const filtered=rows.filter(r=>`${r.id} ${r.voter_id} ${r.candidate_id} ${r.candidates?.name||""}`.toLowerCase().includes(query.toLowerCase()));
+  function exportCsv(){
+    const header=["ID","Nomzod","Voter ID","Sana"];
+    const body=filtered.map(r=>[r.id,r.candidates?.name||r.candidate_id,r.voter_id,new Date(r.created_at).toISOString()]);
+    const csv=[header,...body].map(row=>row.map(v=>`"${String(v).replaceAll('"','""')}"`).join(",")).join("\n");
+    const blob=new Blob([csv],{type:"text/csv;charset=utf-8"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download="cyberstat-ovozlar.csv";a.click();URL.revokeObjectURL(url);
+  }
+  return <div>
+    <div className="flex flex-wrap items-center justify-between gap-3 mb-2"><h1 className="font-display font-bold text-2xl" style={{color:"#EAF4FF"}}>Ovozlar jurnali</h1><button onClick={exportCsv} className="ghost-btn font-display px-3 py-2 rounded-lg text-sm flex items-center gap-2"><Download size={14}/> CSV EXPORT</button></div>
+    <p className="text-sm mb-5" style={{color:"#6E7EA0"}}>Oxirgi 500 ta real ovoz. Voter ID anonim hisob identifikatori bo‘lib, shaxsiy ism/email saqlanmaydi.</p>
+    <input value={query} onChange={e=>setQuery(e.target.value)} placeholder="ID, voter ID yoki nomzod bo‘yicha qidirish" className="w-full rounded-lg px-3 py-2.5 mb-4 text-sm" style={{background:"rgba(120,160,255,0.06)",border:"1px solid rgba(120,160,255,0.2)",color:"#EAF4FF"}}/>
+    <div className="glass rounded-2xl overflow-x-auto"><table className="w-full text-sm min-w-[720px]"><thead><tr className="font-display text-xs text-left" style={{color:"#5E6E90"}}><th className="px-4 py-3">VAQT</th><th className="px-4 py-3">NOMZOD</th><th className="px-4 py-3">VOTER ID</th><th className="px-4 py-3">OVOZ ID</th></tr></thead><tbody>{busy?<tr><td colSpan="4" className="px-4 py-6" style={{color:"#6E7EA0"}}>Yuklanmoqda…</td></tr>:filtered.map(r=><tr key={r.id} style={{borderTop:"1px solid rgba(120,160,255,0.1)"}}><td className="px-4 py-3" style={{color:"#9FB1D6"}}>{new Date(r.created_at).toLocaleString("uz-UZ")}</td><td className="px-4 py-3 font-display font-bold" style={{color:"#EAF4FF"}}>{r.candidates?.name||r.candidate_id}</td><td className="px-4 py-3 text-xs" style={{color:"#8C9BC0"}}>{r.voter_id}</td><td className="px-4 py-3 text-xs" style={{color:"#5FE8FF"}}>{r.id}</td></tr>)}</tbody></table></div>
+  </div>;
 }
 
 function AdminHistory({ audit }) {
@@ -993,57 +923,48 @@ function AdminHistory({ audit }) {
   );
 }
 
-function AdminSettings({ settings, saveSettings, logAudit }) {
+function AdminSettings({ settings, saveSettings }) {
   const [local, setLocal] = useState(settings);
+  const [msg,setMsg]=useState("");
+  const [resetReason,setResetReason]=useState("");
+  const [resetBusy,setResetBusy]=useState(false);
+  useEffect(()=>setLocal(settings),[settings]);
   const dirty = JSON.stringify(local) !== JSON.stringify(settings);
 
   async function save() {
-    await saveSettings(local);
-    await logAudit({ actor: "ADMIN", action: "Sozlamalar yangilandi", target: local.projectName, detail: `Holat: ${local.status}` });
+    try{await saveSettings(local);setMsg("Sozlamalar saqlandi. Barcha foydalanuvchilarga darhol qo‘llanadi.");}
+    catch(e){setMsg("Saqlash amalga oshmadi: "+(e?.message||"xatolik"));}
+    setTimeout(()=>setMsg(""),3500);
   }
-
-  const statuses = [
-    { id: "FAOL", label: "FAOL" },
-    { id: "TOXTATILGAN", label: "TO‘XTATILGAN" },
-    { id: "YAKUNLANGAN", label: "YAKUNLANGAN" },
-  ];
-
-  return (
-    <div className="max-w-lg">
-      <h1 className="font-display font-bold text-2xl mb-6" style={{ color: "#EAF4FF" }}>Sozlamalar</h1>
-      <div className="glass rounded-2xl p-6 space-y-5">
-        <div>
-          <label className="text-xs font-display block mb-1.5" style={{ color: "#7C8AA8" }}>LOYIHA NOMI</label>
-          <input value={local.projectName} onChange={(e) => setLocal({ ...local, projectName: e.target.value })} className="w-full rounded-lg px-3 py-2.5 text-sm"
-            style={{ background: "rgba(120,160,255,0.06)", border: "1px solid rgba(120,160,255,0.2)", color: "#EAF4FF" }} />
-        </div>
-        <div>
-          <label className="text-xs font-display block mb-1.5" style={{ color: "#7C8AA8" }}>TAVSIF / SHIOR</label>
-          <input value={local.tagline} onChange={(e) => setLocal({ ...local, tagline: e.target.value })} className="w-full rounded-lg px-3 py-2.5 text-sm"
-            style={{ background: "rgba(120,160,255,0.06)", border: "1px solid rgba(120,160,255,0.2)", color: "#EAF4FF" }} />
-        </div>
-        <div>
-          <label className="text-xs font-display block mb-2" style={{ color: "#7C8AA8" }}>OVOZ BERISH HOLATI</label>
-          <div className="flex gap-2">
-            {statuses.map((s) => (
-              <button key={s.id} onClick={() => setLocal({ ...local, status: s.id })} className="flex-1 font-display text-xs py-2.5 rounded-lg"
-                style={{
-                  background: local.status === s.id ? "rgba(0,224,255,0.12)" : "rgba(120,160,255,0.05)",
-                  color: local.status === s.id ? "#00E0FF" : "#9FB1D6",
-                  border: `1px solid ${local.status === s.id ? "rgba(0,224,255,0.4)" : "rgba(120,160,255,0.15)"}`,
-                }}>{s.label}</button>
-            ))}
-          </div>
-        </div>
-        <div>
-          <label className="text-xs font-display block mb-1.5" style={{ color: "#7C8AA8" }}>BIR FOYDALANUVCHIGA RUXSAT ETILGAN OVOZLAR SONI</label>
-          <input type="number" min={1} value={local.votesPerUser} onChange={(e) => setLocal({ ...local, votesPerUser: Number(e.target.value) })} className="w-full rounded-lg px-3 py-2.5 text-sm"
-            style={{ background: "rgba(120,160,255,0.06)", border: "1px solid rgba(120,160,255,0.2)", color: "#EAF4FF" }} />
-        </div>
-        <button onClick={save} disabled={!dirty} className="neon-btn font-display w-full py-3 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed">
-          SAQLASH
-        </button>
-      </div>
+  async function resetSurvey(){
+    if(resetReason.trim().length<5)return setMsg("Reset uchun sabab kamida 5 ta belgi bo‘lsin.");
+    if(!window.confirm("DIQQAT: Barcha real ovozlar o‘chiriladi va hisoblagichlar 0 ga qaytadi. Davom etasizmi?"))return;
+    try{setResetBusy(true);await adminResetSurvey(resetReason.trim());setMsg("So‘rovnoma qayta tiklandi. Barcha foydalanuvchilarda natijalar yangilandi.");setResetReason("");setCandidatesAfterReset();}
+    catch(e){setMsg("Reset amalga oshmadi: "+(e?.message||"xatolik"));}
+    finally{setResetBusy(false);setTimeout(()=>setMsg(""),5000);}
+  }
+  async function setCandidatesAfterReset(){window.location.reload();}
+  const statuses=[{id:"FAOL",label:"FAOL"},{id:"TOXTATILGAN",label:"TO‘XTATILGAN"},{id:"YAKUNLANGAN",label:"YAKUNLANGAN"}];
+  return <div className="max-w-2xl">
+    <h1 className="font-display font-bold text-2xl mb-2" style={{color:"#EAF4FF"}}>Tizim sozlamalari</h1>
+    <p className="text-sm mb-6" style={{color:"#6E7EA0"}}>Bu bo‘limdagi sozlamalar markaziy database'da saqlanadi. O‘zgarishlar barcha foydalanuvchilarga bir xil qo‘llanadi.</p>
+    {msg&&<div className="glass rounded-xl px-4 py-3 mb-4 text-sm" style={{color:msg.includes("amalga oshmadi")?"#FF8FA6":"#33FFB0"}}>{msg}</div>}
+    <div className="glass rounded-2xl p-6 space-y-5 mb-6">
+      <div><label className="text-xs font-display block mb-1.5" style={{color:"#7C8AA8"}}>LOYIHA NOMI</label><input value={local.projectName||""} onChange={e=>setLocal({...local,projectName:e.target.value})} className="w-full rounded-lg px-3 py-2.5 text-sm" style={{background:"rgba(120,160,255,0.06)",border:"1px solid rgba(120,160,255,0.2)",color:"#EAF4FF"}}/></div>
+      <div><label className="text-xs font-display block mb-1.5" style={{color:"#7C8AA8"}}>TAVSIF / SHIOR</label><input value={local.tagline||""} onChange={e=>setLocal({...local,tagline:e.target.value})} className="w-full rounded-lg px-3 py-2.5 text-sm" style={{background:"rgba(120,160,255,0.06)",border:"1px solid rgba(120,160,255,0.2)",color:"#EAF4FF"}}/></div>
+      <div><label className="text-xs font-display block mb-1.5" style={{color:"#7C8AA8"}}>TASHKILOT NOMI</label><input value={local.organizerName||"KIBERXAVFSIZLIK MARKAZI"} onChange={e=>setLocal({...local,organizerName:e.target.value})} className="w-full rounded-lg px-3 py-2.5 text-sm" style={{background:"rgba(120,160,255,0.06)",border:"1px solid rgba(120,160,255,0.2)",color:"#EAF4FF"}}/></div>
+      <div><label className="text-xs font-display block mb-1.5" style={{color:"#7C8AA8"}}>RASMIY SO‘ROVNOMA MATNI</label><textarea rows={3} value={local.organizerText||""} onChange={e=>setLocal({...local,organizerText:e.target.value})} className="w-full rounded-lg px-3 py-2.5 text-sm resize-none" style={{background:"rgba(120,160,255,0.06)",border:"1px solid rgba(120,160,255,0.2)",color:"#EAF4FF"}}/></div>
+      <div><label className="text-xs font-display block mb-2" style={{color:"#7C8AA8"}}>OVOZ BERISH HOLATI</label><div className="flex gap-2 flex-wrap">{statuses.map(s=><button key={s.id} onClick={()=>setLocal({...local,status:s.id})} className="flex-1 min-w-[130px] font-display text-xs py-2.5 rounded-lg" style={{background:local.status===s.id?"rgba(0,224,255,0.12)":"rgba(120,160,255,0.05)",color:local.status===s.id?"#00E0FF":"#9FB1D6",border:`1px solid ${local.status===s.id?"rgba(0,224,255,0.4)":"rgba(120,160,255,0.15)"}`}}>{s.label}</button>)}</div></div>
+      <label className="flex items-center justify-between gap-4 glass rounded-lg p-3"><span><span className="block text-sm" style={{color:"#EAF4FF"}}>Public natijalarni ko‘rsatish</span><span className="block text-xs mt-1" style={{color:"#6E7EA0"}}>O‘chirilsa, NATIJALAR bo‘limi foydalanuvchilarga yopiladi.</span></span><input type="checkbox" checked={local.showResults!==false} onChange={e=>setLocal({...local,showResults:e.target.checked})}/></label>
+      <div className="text-xs" style={{color:"#6E7EA0"}}>Bir foydalanuvchiga ruxsat: <b style={{color:"#C9DBFF"}}>1 ovoz</b>. Bu limit server tomonda ham majburiy.</div>
+      <button onClick={save} disabled={!dirty} className="neon-btn font-display w-full py-3 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed">SAQLASH</button>
     </div>
-  );
+    <div className="rounded-2xl p-6" style={{background:"rgba(255,92,122,0.04)",border:"1px solid rgba(255,92,122,0.22)"}}>
+      <div className="flex items-center gap-2 mb-2"><RotateCcw size={17} style={{color:"#FF8FA6"}}/><h2 className="font-display font-bold" style={{color:"#FFB0BE"}}>Xavfli boshqaruv</h2></div>
+      <p className="text-sm mb-4" style={{color:"#8C9BC0"}}>So‘rovnomani qayta tiklash barcha real ovozlarni va ishtirokchilar hisobini 0 ga qaytaradi. Har bir amal audit jurnaliga yoziladi.</p>
+      <input value={resetReason} onChange={e=>setResetReason(e.target.value)} placeholder="Reset sababi" className="w-full rounded-lg px-3 py-2.5 mb-3 text-sm" style={{background:"rgba(120,160,255,0.04)",border:"1px solid rgba(255,92,122,0.2)",color:"#EAF4FF"}}/>
+      <button disabled={resetBusy} onClick={resetSurvey} className="w-full py-3 rounded-lg font-display" style={{background:"rgba(255,92,122,0.1)",border:"1px solid rgba(255,92,122,0.35)",color:"#FF8FA6"}}>{resetBusy?"BAJARILMOQDA…":"BARCHA OVOZLARNI RESET QILISH"}</button>
+    </div>
+  </div>;
 }
+
