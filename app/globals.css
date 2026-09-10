@@ -45,3 +45,332 @@
 .nav nav .nav-tab:hover{
   color:#fff;
 }
+
+/* CYBERSTAT PUBLIC RATING MENU */
+
+.cs-rating-overlay{
+  position:fixed;
+  inset:0;
+  z-index:60;
+  padding:24px;
+  display:grid;
+  place-items:center;
+  background:rgba(0,0,0,.90);
+  backdrop-filter:blur(18px);
+  overflow:auto;
+}
+
+.cs-rating-menu{
+  width:min(1050px,100%);
+  max-height:94vh;
+  overflow:auto;
+  background:
+    radial-gradient(circle at 85% 10%,rgba(255,94,31,.08),transparent 30%),
+    #090807;
+  border:1px solid rgba(255,94,31,.30);
+  box-shadow:0 35px 120px rgba(0,0,0,.80);
+  padding:30px;
+}
+
+.cs-rating-header{
+  display:flex;
+  justify-content:space-between;
+  gap:25px;
+  padding-bottom:22px;
+  border-bottom:1px solid rgba(255,94,31,.14);
+}
+
+.cs-rating-header small{
+  color:var(--orange);
+  font-size:8px;
+  letter-spacing:2.5px;
+}
+
+.cs-rating-header h2{
+  margin:9px 0 7px;
+  font:700 40px 'Space Grotesk';
+}
+
+.cs-rating-header p{
+  margin:0;
+  color:#777;
+  font-size:12px;
+}
+
+.cs-rating-close{
+  width:44px;
+  height:44px;
+  display:grid;
+  place-items:center;
+  background:#111;
+  color:#888;
+  border:1px solid rgba(255,94,31,.22);
+}
+
+.cs-rating-close:hover{
+  color:#fff;
+  border-color:var(--orange);
+}
+
+.cs-rating-stats{
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:1px;
+  margin:20px 0;
+  background:rgba(255,94,31,.12);
+}
+
+.cs-rating-stats>div{
+  background:#0d0b0a;
+  padding:17px 20px;
+}
+
+.cs-rating-stats small{
+  display:block;
+  color:#666;
+  font-size:8px;
+  letter-spacing:1.7px;
+}
+
+.cs-rating-stats strong{
+  display:block;
+  margin-top:6px;
+  font:700 23px 'Space Grotesk';
+}
+
+.cs-ranking-list{
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+}
+
+.cs-ranking-item{
+  display:grid;
+  grid-template-columns:65px 82px 1fr 130px;
+  align-items:center;
+  gap:18px;
+  min-height:105px;
+  padding:12px 18px;
+  background:linear-gradient(90deg,rgba(255,255,255,.025),rgba(255,94,31,.025));
+  border:1px solid rgba(255,255,255,.06);
+  transition:.2s;
+}
+
+.cs-ranking-item:hover{
+  transform:translateX(3px);
+  border-color:rgba(255,94,31,.28);
+}
+
+.cs-ranking-item.rank-first{
+  border-color:rgba(255,94,31,.42);
+  background:linear-gradient(90deg,rgba(255,94,31,.09),rgba(255,94,31,.025));
+}
+
+.cs-ranking-item.rank-second{
+  border-color:rgba(255,94,31,.25);
+}
+
+.cs-ranking-item.rank-third{
+  border-color:rgba(255,94,31,.18);
+}
+
+.cs-rank-number{
+  color:var(--orange);
+  font:700 20px 'Space Grotesk';
+}
+
+.cs-rank-photo{
+  width:72px;
+  height:72px;
+  overflow:hidden;
+  border:1px solid rgba(255,94,31,.28);
+  background:#111;
+  display:grid;
+  place-items:center;
+  color:var(--orange);
+}
+
+.cs-rank-photo img{
+  width:100%;
+  height:100%;
+  object-fit:cover;
+  opacity:1!important;
+  filter:none!important;
+}
+
+.cs-rank-info{
+  min-width:0;
+}
+
+.cs-rank-author{
+  color:#777;
+  font-size:8px;
+  letter-spacing:1.4px;
+}
+
+.cs-rank-info>strong{
+  display:block;
+  margin:5px 0;
+  font:700 18px 'Space Grotesk';
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+
+.cs-rank-rating{
+  color:#aaa;
+  font-size:9px;
+}
+
+.cs-rank-rating span{
+  color:var(--orange);
+  margin-right:4px;
+}
+
+.cs-rank-progress{
+  width:100%;
+  height:4px;
+  margin-top:10px;
+  background:#24201d;
+  overflow:hidden;
+}
+
+.cs-rank-progress i{
+  display:block;
+  height:100%;
+  background:linear-gradient(90deg,var(--orange),var(--red));
+}
+
+.cs-rank-result{
+  text-align:right;
+}
+
+.cs-rank-result strong{
+  display:block;
+  font:700 22px 'Space Grotesk';
+}
+
+.cs-rank-result span{
+  display:block;
+  color:#666;
+  font-size:7px;
+  letter-spacing:1.5px;
+}
+
+.cs-rank-result em{
+  display:block;
+  color:var(--orange);
+  font-style:normal;
+  font-size:10px;
+  margin-top:5px;
+}
+
+.cs-rating-footer{
+  display:flex;
+  justify-content:space-between;
+  margin-top:20px;
+  padding-top:16px;
+  border-top:1px solid rgba(255,94,31,.12);
+  color:#555;
+  font-size:8px;
+  letter-spacing:1.5px;
+}
+
+.cs-rating-footer i{
+  display:inline-block;
+  width:6px;
+  height:6px;
+  margin-right:7px;
+  border-radius:50%;
+  background:var(--orange);
+  box-shadow:0 0 10px var(--orange);
+}
+
+.cs-rating-empty{
+  min-height:280px;
+  display:grid;
+  place-items:center;
+  align-content:center;
+  gap:10px;
+  border:1px solid rgba(255,94,31,.12);
+  background:#0c0a09;
+  text-align:center;
+}
+
+.cs-rating-empty svg{
+  width:38px;
+  height:38px;
+  color:var(--orange);
+}
+
+.cs-rating-empty strong{
+  font:700 18px 'Space Grotesk';
+}
+
+.cs-rating-empty span{
+  color:#666;
+  font-size:10px;
+}
+
+@media(max-width:800px){
+  .cs-rating-overlay{
+    padding:12px;
+  }
+
+  .cs-rating-menu{
+    padding:20px;
+  }
+
+  .cs-ranking-item{
+    grid-template-columns:55px 70px 1fr 105px;
+    gap:12px;
+  }
+}
+
+@media(max-width:600px){
+  .cs-rating-menu{
+    padding:16px;
+  }
+
+  .cs-rating-header h2{
+    font-size:27px;
+  }
+
+  .cs-rating-stats strong{
+    font-size:17px;
+  }
+
+  .cs-ranking-item{
+    grid-template-columns:42px 58px 1fr;
+    gap:10px;
+    min-height:92px;
+    padding:10px;
+  }
+
+  .cs-rank-photo{
+    width:54px;
+    height:54px;
+  }
+
+  .cs-rank-info>strong{
+    font-size:15px;
+  }
+
+  .cs-rank-result{
+    grid-column:3;
+    text-align:left;
+    display:flex;
+    align-items:center;
+    gap:7px;
+  }
+
+  .cs-rank-result em{
+    margin-left:auto;
+  }
+
+  .cs-rating-footer{
+    flex-direction:column;
+    gap:7px;
+  }
+}
+

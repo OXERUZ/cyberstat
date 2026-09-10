@@ -35,7 +35,152 @@ function PublicApp({onAdmin}){
 }
 function VotingMenu({candidates,status,voted,onClose,onSelect}){const closed=status!=='FAOL';return <div className="vote-menu-bg"><div className="vote-menu"><header><div><small>CYBERSTAT / SECURE BALLOT</small><h2>Finalistni tanlang</h2><p>Ovoz berish uchun quyidagi finalistlardan birini tanlang.</p></div><button onClick={onClose}><X/></button></header>{closed&&<div className="vote-menu-status">{status==='YAKUNLANGAN'?'Ovoz berish yakunlangan.':'Ovoz berish vaqtincha to‘xtatilgan.'}</div>}{voted&&<div className="vote-menu-status">Sizning ovozingiz allaqachon qayd etilgan.</div>}<div className="vote-menu-grid">{candidates.map((c,i)=><button className="vote-choice" key={c.id} onClick={()=>!closed&&!voted&&onSelect(c)} disabled={closed||voted}><div className="vote-menu-photo">{c.image_url?<img src={c.image_url} alt={c.author_name||c.name}/>:<div><ShieldCheck/></div>}<span>#{String(i+1).padStart(2,'0')}</span></div><div className="vote-choice-info"><small>{c.author_name||'Muallif'}</small><strong>{c.name}</strong><em>★ {Number(c.rating||0).toFixed(1)} / 5.0</em></div><ArrowRight/></button>)}</div><div className="vote-menu-footer"><span>1 QURILMA = 1 OVOZ</span><span>SECURE • CENTRAL • REAL-TIME</span></div></div></div>}
 function PublicCandidatesMenu({candidates,total,onClose}){const active=candidates.filter(c=>c.active!==false);return <div className="vote-menu-bg"><div className="vote-menu"><header><div><small>CYBERSTAT / FINALISTLAR</small><h2>Nomzodlar</h2><p>Barcha faol finalistlar haqida to‘liq ma’lumot.</p></div><button onClick={onClose}><X/></button></header><div className="vote-menu-grid">{active.map((c,i)=><div className="vote-choice candidates-view-card" key={c.id}><div className="vote-menu-photo">{c.image_url?<img src={c.image_url} alt={c.author_name||c.name}/>:<div><ShieldCheck/></div>}<span>#{String(i+1).padStart(2,'0')}</span></div><div className="vote-choice-info"><small>{c.author_name||'Muallif'}</small><strong>{c.name}</strong><em>★ {Number(c.rating||0).toFixed(1)} / 5.0</em><p className="project-desc">{c.bio||'Loyiha haqida ma’lumot kiritilmagan.'}</p><div className="vote-line"><strong>{fmt(c.votes)}</strong><span>OVOZ</span><em>{pct(c.votes,total).toFixed(1)}%</em></div></div></div>)}</div><div className="vote-menu-footer"><span>{active.length} FINALIST</span><span>SECURE • CENTRAL • REAL-TIME</span></div></div></div>}
-function PublicRatingMenu({candidates,total,participants,onClose}){const sorted=[...candidates].sort((a,b)=>Number(b.votes||0)-Number(a.votes||0));return <div className="vote-menu-bg"><div className="vote-menu"><header><div><small>CYBERSTAT / REYTING</small><h2>Umumiy reyting</h2><p>Jonli ovoz statistikasi va finalistlar ranking jadvali.</p></div><button onClick={onClose}><X/></button></header><div className="metrics rating-menu-metrics"><Metric label="JAMI OVOZ" value={total}/><Metric label="ISHTIROKCHI" value={participants}/><Metric label="FINALIST" value={candidates.length}/></div><div className="vote-menu-grid rating-menu-list">{sorted.map((c,i)=><RankRow key={c.id} c={c} rank={i+1} total={total}/>)}</div><div className="vote-menu-footer"><span>LIVE RANKING</span><span>SECURE • CENTRAL • REAL-TIME</span></div></div></div>}
+function PublicRatingMenu({candidates,total,participants,onClose}){
+  const active=candidates
+    .filter(c=>c.active!==false)
+    .sort((a,b)=>Number(b.votes||0)-Number(a.votes||0));
+
+  const activeTotal=active.reduce(
+    (sum,c)=>sum+Number(c.votes||0),
+    0
+  );
+
+  const percentage=(votes)=>{
+    return activeTotal
+      ? ((Number(votes||0)/activeTotal)*100).toFixed(1)
+      : '0.0';
+  };
+
+  return (
+    <div
+      className="cs-rating-overlay"
+      onMouseDown={e=>{
+        if(e.target===e.currentTarget) onClose();
+      }}
+    >
+      <div
+        className="cs-rating-menu"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Nomzodlar reytingi"
+      >
+
+        <header className="cs-rating-header">
+          <div>
+            <small>CYBERSTAT / LIVE RANKING</small>
+            <h2>Nomzodlar reytingi</h2>
+            <p>
+              Barcha faol nomzodlar ovozlar soni bo‘yicha ketma-ketlikda.
+            </p>
+          </div>
+
+          <button
+            className="cs-rating-close"
+            onClick={onClose}
+            aria-label="Yopish"
+          >
+            <X/>
+          </button>
+        </header>
+
+        <div className="cs-rating-stats">
+          <div>
+            <small>JAMI OVOZ</small>
+            <strong>{fmt(activeTotal)}</strong>
+          </div>
+
+          <div>
+            <small>ISHTIROKCHILAR</small>
+            <strong>{fmt(participants)}</strong>
+          </div>
+
+          <div>
+            <small>FINALISTLAR</small>
+            <strong>{active.length}</strong>
+          </div>
+        </div>
+
+        {active.length===0 ? (
+          <div className="cs-rating-empty">
+            <Trophy/>
+            <strong>Hozircha reyting mavjud emas</strong>
+            <span>Faol nomzodlar qo‘shilgach reyting shu yerda ko‘rinadi.</span>
+          </div>
+        ) : (
+          <div className="cs-ranking-list">
+
+            {active.map((c,index)=>{
+              const votes=Number(c.votes||0);
+              const percent=Number(percentage(votes));
+
+              return (
+                <div
+                  className={`cs-ranking-item ${
+                    index===0
+                      ? 'rank-first'
+                      : index===1
+                      ? 'rank-second'
+                      : index===2
+                      ? 'rank-third'
+                      : ''
+                  }`}
+                  key={c.id}
+                >
+
+                  <div className="cs-rank-number">
+                    #{String(index+1).padStart(2,'0')}
+                  </div>
+
+                  <div className="cs-rank-photo">
+                    {c.image_url ? (
+                      <img
+                        src={c.image_url}
+                        alt={c.author_name||c.name}
+                      />
+                    ) : (
+                      <ShieldCheck/>
+                    )}
+                  </div>
+
+                  <div className="cs-rank-info">
+                    <div className="cs-rank-author">
+                      {c.author_name||'Muallif'}
+                    </div>
+
+                    <strong>{c.name}</strong>
+
+                    <div className="cs-rank-rating">
+                      <span>★</span>
+                      {Number(c.rating||0).toFixed(1)} / 5.0
+                    </div>
+
+                    <div className="cs-rank-progress">
+                      <i style={{width:`${Math.min(percent,100)}%`}}/>
+                    </div>
+                  </div>
+
+                  <div className="cs-rank-result">
+                    <strong>{fmt(votes)}</strong>
+                    <span>OVOZ</span>
+                    <em>{percent.toFixed(1)}%</em>
+                  </div>
+
+                </div>
+              );
+            })}
+
+          </div>
+        )}
+
+        <footer className="cs-rating-footer">
+          <span><i/> LIVE RANKING</span>
+          <span>REAL-TIME • SECURE • CENTRAL</span>
+        </footer>
+
+      </div>
+    </div>
+  );
+}
 function ArenaPanel({candidates,total,settings}){const leader=candidates[0],end=settings.countdown_end?new Date(settings.countdown_end):null;return <div className="arena-panel"><div className="panel-top"><span><i/> LIVE ARENA</span><Countdown end={end} closed={settings.status==='YAKUNLANGAN'}/></div><div className="radar"><div className="radar-ring r1"/><div className="radar-ring r2"/><div className="radar-core"><Trophy/><b>{leader?'#01':'—'}</b><small>LEADER</small></div></div>{leader?<div className="panel-leader"><small>HOZIRGI YETAKCHI</small><strong>{leader.name}</strong><span>{fmt(leader.votes)} OVOZ • {pct(leader.votes,total).toFixed(1)}%</span></div>:<div className="empty">Finalistlar hali kiritilmagan.</div>}</div>}
 function Countdown({end,closed}){const [now,setNow]=useState(Date.now());useEffect(()=>{const t=setInterval(()=>setNow(Date.now()),1000);return()=>clearInterval(t)},[]);if(closed)return <b className="closed-tag">CLOSED</b>;if(!end)return <b className="countdown">FINAL LIVE</b>;const s=Math.max(0,Math.floor((end-now)/1000)),d=Math.floor(s/86400),h=Math.floor(s%86400/3600),m=Math.floor(s%3600/60),sec=s%60;return <b className="countdown"><Clock3/> {d?`${d}K `:''}{String(h).padStart(2,'0')}:{String(m).padStart(2,'0')}:{String(sec).padStart(2,'0')}</b>}
 function Candidate({c,rank,total,disabled,select}){return <article className="candidate"><div className="photo">{c.image_url?<img src={c.image_url} alt={c.author_name||c.name}/>:<div><ShieldCheck/></div>}<span>#{String(rank).padStart(2,'0')}</span><div className="author-chip"><small>LOYIHA MUALLIFI</small><strong>{c.author_name||'Muallif'}</strong></div></div><div className="cbody"><div className="project-head">{c.project_logo_url?<img className="project-logo" src={c.project_logo_url} alt="Loyiha logosi"/>:<div className="project-logo placeholder"><ShieldCheck/></div>}<div><div className="cmeta"><span>FINALIST / LOYIHA</span><b>★ {Number(c.rating||0).toFixed(1)}/5.0</b></div><h3>{c.name}</h3></div></div><p className="project-desc">{c.bio||'Loyiha haqida ma’lumot kiritilmagan.'}</p><div className="vote-line"><strong>{fmt(c.votes)}</strong><span>OVOZ</span><em>{pct(c.votes,total).toFixed(1)}%</em></div><div className="bar"><i style={{width:`${Math.min(100,pct(c.votes,total))}%`}}/></div><button onClick={select} disabled={disabled}><Vote/> OVOZ BERISH <ArrowRight/></button></div></article>}
