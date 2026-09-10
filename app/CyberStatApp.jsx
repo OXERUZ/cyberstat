@@ -34,7 +34,182 @@ function PublicApp({onAdmin}){
  <footer><span>{s.footer_left||'CYBERSTAT FINAL ARENA'}</span><span>{s.footer_right||'SECURE • CENTRAL • REAL-TIME'}</span><button className="admin-link" onClick={onAdmin}>ADMIN</button></footer>{selected&&<Confirm c={selected} onClose={()=>setSelected(null)} onConfirm={vote}/>}</div>
 }
 function VotingMenu({candidates,status,voted,onClose,onSelect}){const closed=status!=='FAOL';return <div className="vote-menu-bg"><div className="vote-menu"><header><div><small>CYBERSTAT / SECURE BALLOT</small><h2>Finalistni tanlang</h2><p>Ovoz berish uchun quyidagi finalistlardan birini tanlang.</p></div><button onClick={onClose}><X/></button></header>{closed&&<div className="vote-menu-status">{status==='YAKUNLANGAN'?'Ovoz berish yakunlangan.':'Ovoz berish vaqtincha to‘xtatilgan.'}</div>}{voted&&<div className="vote-menu-status">Sizning ovozingiz allaqachon qayd etilgan.</div>}<div className="vote-menu-grid">{candidates.map((c,i)=><button className="vote-choice" key={c.id} onClick={()=>!closed&&!voted&&onSelect(c)} disabled={closed||voted}><div className="vote-menu-photo">{c.image_url?<img src={c.image_url} alt={c.author_name||c.name}/>:<div><ShieldCheck/></div>}<span>#{String(i+1).padStart(2,'0')}</span></div><div className="vote-choice-info"><small>{c.author_name||'Muallif'}</small><strong>{c.name}</strong><em>★ {Number(c.rating||0).toFixed(1)} / 5.0</em></div><ArrowRight/></button>)}</div><div className="vote-menu-footer"><span>1 QURILMA = 1 OVOZ</span><span>SECURE • CENTRAL • REAL-TIME</span></div></div></div>}
-function PublicCandidatesMenu({candidates,total,onClose}){const active=candidates.filter(c=>c.active!==false);return <div className="vote-menu-bg"><div className="vote-menu"><header><div><small>CYBERSTAT / FINALISTLAR</small><h2>Nomzodlar</h2><p>Barcha faol finalistlar haqida to‘liq ma’lumot.</p></div><button onClick={onClose}><X/></button></header><div className="vote-menu-grid">{active.map((c,i)=><div className="vote-choice candidates-view-card" key={c.id}><div className="vote-menu-photo">{c.image_url?<img src={c.image_url} alt={c.author_name||c.name}/>:<div><ShieldCheck/></div>}<span>#{String(i+1).padStart(2,'0')}</span></div><div className="vote-choice-info"><small>{c.author_name||'Muallif'}</small><strong>{c.name}</strong><em>★ {Number(c.rating||0).toFixed(1)} / 5.0</em><p className="project-desc">{c.bio||'Loyiha haqida ma’lumot kiritilmagan.'}</p><div className="vote-line"><strong>{fmt(c.votes)}</strong><span>OVOZ</span><em>{pct(c.votes,total).toFixed(1)}%</em></div></div></div>)}</div><div className="vote-menu-footer"><span>{active.length} FINALIST</span><span>SECURE • CENTRAL • REAL-TIME</span></div></div></div>}
+function PublicCandidatesMenu({candidates,total,onClose,onOpen}){
+  const active=candidates.filter(c=>c.active!==false);
+
+  return (
+    <div className="vote-menu-bg">
+      <div className="vote-menu">
+
+        <header>
+          <div>
+            <small>CYBERSTAT / FINALISTLAR</small>
+            <h2>Nomzodlar</h2>
+            <p>Barcha faol finalistlar haqida to‘liq ma’lumot.</p>
+          </div>
+
+          <button onClick={onClose}>
+            <X/>
+          </button>
+        </header>
+
+        <div className="vote-menu-grid">
+
+          {active.map((c,i)=>(
+            <button
+              className="vote-choice candidates-view-card"
+              key={c.id}
+              onClick={()=>onOpen(c)}
+            >
+
+              <div className="vote-menu-photo">
+                {c.image_url ? (
+                  <img
+                    src={c.image_url}
+                    alt={c.author_name||c.name}
+                  />
+                ) : (
+                  <div><ShieldCheck/></div>
+                )}
+
+                <span>
+                  #{String(i+1).padStart(2,'0')}
+                </span>
+              </div>
+
+              <div className="vote-choice-info">
+
+                <small>
+                  {c.author_name||'Muallif'}
+                </small>
+
+                <strong>{c.name}</strong>
+
+                <em>
+                  ★ {Number(c.rating||0).toFixed(1)} / 5.0
+                </em>
+
+                <p className="project-desc">
+                  {c.bio||'Loyiha haqida ma’lumot kiritilmagan.'}
+                </p>
+
+                <div className="vote-line">
+                  <strong>{fmt(c.votes)}</strong>
+                  <span>OVOZ</span>
+                  <em>
+                    {pct(c.votes,total).toFixed(1)}%
+                  </em>
+                </div>
+
+              </div>
+
+              <ArrowRight/>
+
+            </button>
+          ))}
+
+        </div>
+
+        <div className="vote-menu-footer">
+          <span>{active.length} FINALIST</span>
+          <span>SECURE • CENTRAL • REAL-TIME</span>
+        </div>
+
+      </div>
+    </div>
+  );
+}
+
+function CandidateDetail({c,onClose,onVote}){
+  return (
+    <div
+      className="candidate-detail-overlay"
+      onMouseDown={e=>{
+        if(e.target===e.currentTarget) onClose();
+      }}
+    >
+      <div className="candidate-detail">
+
+        <button
+          className="candidate-detail-close"
+          onClick={onClose}
+          aria-label="Yopish"
+        >
+          <X/>
+        </button>
+
+        <div className="candidate-detail-image">
+          {c.image_url ? (
+            <img src={c.image_url} alt={c.author_name||c.name}/>
+          ) : (
+            <ShieldCheck/>
+          )}
+        </div>
+
+        <div className="candidate-detail-content">
+
+          <small>CYBERSTAT / PROJECT PROFILE</small>
+
+          <div className="candidate-detail-number">
+            FINALIST
+          </div>
+
+          <h2>{c.name}</h2>
+
+          <div className="candidate-detail-author">
+            MUALLIF: <strong>{c.author_name||'Muallif'}</strong>
+          </div>
+
+          <div className="candidate-detail-rating">
+            <span>★</span>
+            <strong>{Number(c.rating||0).toFixed(1)}</strong>
+            <em>/ 5.0 RATING</em>
+          </div>
+
+          <div className="candidate-detail-section">
+            <small>LOYIHA HAQIDA</small>
+            <p>
+              {c.bio||'Loyiha haqida ma’lumot kiritilmagan.'}
+            </p>
+          </div>
+
+          <div className="candidate-detail-stats">
+
+            <div>
+              <small>OVOZLAR</small>
+              <strong>{fmt(c.votes)}</strong>
+            </div>
+
+            <div>
+              <small>ULUSH</small>
+              <strong>
+                {Number(c.votes||0) > 0 ? 'LIVE' : '0.0%'}
+              </strong>
+            </div>
+
+            <div>
+              <small>STATUS</small>
+              <strong>ACTIVE</strong>
+            </div>
+
+          </div>
+
+          <button
+            className="primary candidate-detail-vote"
+            onClick={onVote}
+          >
+            <Vote/>
+            OVOZ BERISH
+            <ArrowRight/>
+          </button>
+
+        </div>
+
+      </div>
+    </div>
+  );
+}
+
 function PublicRatingMenu({candidates,total,participants,onClose}){
   const active=candidates
     .filter(c=>c.active!==false)
