@@ -149,18 +149,18 @@ $$;
 revoke all on function public.admin_save_candidate(text,text,text,boolean,text,numeric,text,text) from public;
 grant execute on function public.admin_save_candidate(text,text,text,boolean,text,numeric,text,text) to authenticated;
 
-create or replace function public.admin_delete_candidate(p_id text)
+create or replace function public.admin_delete_candidate(p_candidate_id text)
 returns jsonb language plpgsql security definer set search_path=public as $$
 declare v_name text; v_votes integer;
 begin
   if not public.is_admin() then raise exception 'ADMIN_REQUIRED'; end if;
-  select name,votes into v_name,v_votes from public.candidates where id=p_id for update;
+  select name,votes into v_name,v_votes from public.candidates where id=p_candidate_id for update;
   if v_name is null then raise exception 'CANDIDATE_NOT_FOUND'; end if;
   if v_votes > 0 then
-    update public.candidates set active=false,updated_at=now() where id=p_id;
+    update public.candidates set active=false,updated_at=now() where id=p_candidate_id;
     insert into public.audit_logs(actor,action,target,detail) values('ADMIN','NOMZOD_ARXIVLANDI',v_name,'Ovoz mavjudligi sababli o‘chirilmadi, faolsizlantirildi.');
   else
-    delete from public.candidates where id=p_id;
+    delete from public.candidates where id=p_candidate_id;
     insert into public.audit_logs(actor,action,target,detail) values('ADMIN','NOMZOD_OCHIRILDI',v_name,'Nomzod va uning ovozlari 0 bo‘lgan holatda o‘chirildi.');
   end if;
   return jsonb_build_object('ok',true);
