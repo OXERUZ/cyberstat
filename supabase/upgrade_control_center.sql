@@ -64,10 +64,8 @@ BEGIN
  SELECT COALESCE(sum(votes),0) INTO v_total FROM public.candidates;
  SELECT COALESCE(participants,0) INTO v_participants FROM public.survey_stats WHERE id=1;
  SELECT COALESCE(avg(votes),0) INTO v_avg FROM public.candidates;
- SELECT COALESCE(count(*),0)::integer INTO v_top_delta
- FROM public.audit_logs
- WHERE action IN ('OVOZ_QOSHILDI','OVOZ_AYIRILDI')
-   AND created_at >= now() - interval '24 hours';
+ SELECT COALESCE(max(abs(delta)),0) INTO v_top_delta
+ FROM (SELECT candidate_id, count(*) FILTER (WHERE action IN ('OVOZ_QOSHILDI','OVOZ_AYIRILDI'))::integer AS delta FROM public.audit_logs GROUP BY candidate_id) x;
  SELECT coalesce(jsonb_agg(jsonb_build_object('day',day,'votes',votes) ORDER BY day),'[]'::jsonb) INTO v_daily
  FROM (
    SELECT to_char(d::date,'DD.MM') AS day, COALESCE(sum(CASE WHEN v.id IS NOT NULL THEN 1 ELSE 0 END),0)::integer AS votes
@@ -100,3 +98,59 @@ BEGIN
 END; $$;
 REVOKE ALL ON FUNCTION public.admin_delete_candidate(text) FROM public;
 GRANT EXECUTE ON FUNCTION public.admin_delete_candidate(text) TO authenticated;
+
+-- Dedicated rating control: rating is intentionally independent from vote adjustment.
+DROP FUNCTION IF EXISTS public.admin_set_rating(text,numeric);
+CREATE OR REPLACE FUNCTION public.admin_set_rating(
+  p_candidate_id text,
+  p_rating numeric
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path=public
+AS $$
+DECLARE v_name text;
+BEGIN
+  IF NOT public.is_admin() THEN RAISE EXCEPTION 'ADMIN_REQUIRED'; END IF;
+  IF p_rating IS NULL OR p_rating < 0 OR p_rating > 5 THEN
+    RAISE EXCEPTION 'INVALID_RATING';
+  END IF;
+  SELECT name INTO v_name FROM public.candidates WHERE id=p_candidate_id FOR UPDATE;
+  IF v_name IS NULL THEN RAISE EXCEPTION 'CANDIDATE_NOT_FOUND'; END IF;
+  UPDATE public.candidates
+  SET rating=round(p_rating::numeric,1), updated_at=now()
+  WHERE id=p_candidate_id;
+  INSERT INTO public.audit_logs(actor,action,target,detail)
+  VALUES('ADMIN','REYTING_YANGILANDI',v_name,'Yangi reyting: '||round(p_rating::numeric,1)::text||'/5.0');
+  RETURN jsonb_build_object('ok',true,'candidate_id',p_candidate_id,'rating',round(p_rating::numeric,1));
+END;
+$$;
+REVOKE ALL ON FUNCTION public.admin_set_rating(text,numeric) FROM public;
+GRANT EXECUTE ON FUNCTION public.admin_set_rating(text,numeric) TO authenticated;
+
+-- Keep analytics compatible with the current audit_logs schema (there is no candidate_id column).
+CREATE OR REPLACE FUNCTION public.admin_get_analytics()
+RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
+DECLARE v_total integer; v_participants integer; v_avg numeric; v_top_delta integer; v_daily jsonb;
+BEGIN
+  IF NOT public.is_admin() THEN RAISE EXCEPTION 'ADMIN_REQUIRED'; END IF;
+  SELECT COALESCE(sum(votes),0)::integer INTO v_total FROM public.candidates;
+  SELECT COALESCE(participants,0)::integer INTO v_participants FROM public.survey_stats WHERE id=1;
+  SELECT COALESCE(avg(votes),0) INTO v_avg FROM public.candidates;
+  SELECT COALESCE(count(*),0)::integer INTO v_top_delta
+  FROM public.audit_logs
+  WHERE action IN ('OVOZ_QOSHILDI','OVOZ_AYIRILDI')
+    AND created_at >= now() - interval '24 hours';
+  SELECT coalesce(jsonb_agg(jsonb_build_object('day',day,'votes',votes) ORDER BY day),'[]'::jsonb) INTO v_daily
+  FROM (
+    SELECT to_char(d::date,'DD.MM') AS day,
+           COALESCE(sum(CASE WHEN v.id IS NOT NULL THEN 1 ELSE 0 END),0)::integer AS votes
+    FROM generate_series(current_date-6,current_date,interval '1 day') d
+    LEFT JOIN public.votes v ON v.created_at::date=d::date
+    GROUP BY d::date
+  ) q;
+  RETURN jsonb_build_object('ok',true,'total_votes',v_total,'participants',v_participants,'average_votes',round(v_avg,1),'top_delta',v_top_delta,'daily',v_daily);
+END; $$;
+REVOKE ALL ON FUNCTION public.admin_get_analytics() FROM public;
+GRANT EXECUTE ON FUNCTION public.admin_get_analytics() TO authenticated;
