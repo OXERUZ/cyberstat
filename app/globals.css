@@ -32,3 +32,16 @@
 .rating-admin-row>.primary{white-space:nowrap}
 @media(max-width:900px){.vote-menu-grid{grid-template-columns:1fr 1fr}.rating-admin-row{grid-template-columns:1fr}.rating-admin-row>.primary{width:100%}}
 @media(max-width:600px){.vote-menu-bg{padding:10px}.vote-menu{padding:18px}.vote-menu header h2{font-size:30px}.vote-menu-grid{grid-template-columns:1fr}.vote-choice{grid-template-columns:120px 1fr 30px}.vote-menu-photo{height:170px}.vote-menu-footer{flex-direction:column;gap:7px}.rating-admin-row{padding:14px}}
+.nav nav .nav-tab{
+  color:#aaa;
+  background:none;
+  border:0;
+  padding:0;
+  margin:0;
+  font-size:10px;
+  letter-spacing:1.8px;
+}
+
+.nav nav .nav-tab:hover{
+  color:#fff;
+}
