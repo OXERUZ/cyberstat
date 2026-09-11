@@ -1,0 +1,1530 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { supabase } from "../lib/supabase";
+import {
+  Activity,
+  ArrowRight,
+  BarChart3,
+  CheckCircle2,
+  ChevronRight,
+  Eye,
+  Image as ImageIcon,
+  LockKeyhole,
+  Save,
+  Shield,
+  Star,
+  Trophy,
+  Upload,
+  X,
+  Zap
+} from "lucide-react";
+
+const TASK_COUNT = 10;
+
+const initialFinalists = [
+  {
+    id: "01",
+    name: "XOSHIMOV XOSHIMXON",
+    project: "NOVA GUARD",
+    author: "XOSHIMOV XOSHIMXON",
+    bio: "Android qurilmalarini kiber tahdidlardan himoyalashga mo‘ljallangan xavfsizlik platformasi.",
+    image: "",
+    progress: 10,
+    rating: 5.0,
+    vip: true
+  },
+  {
+    id: "02",
+    name: "JULIYEV MUHAMMAD",
+    project: "VANGUARD-X",
+    author: "JULIYEV MUHAMMAD",
+    bio: "Zamonaviy kiberxavfsizlik muammolarini aniqlash va himoyalanishga yo‘naltirilgan loyiha.",
+    image: "",
+    progress: 7,
+    rating: 4.8,
+    vip: false
+  },
+  {
+    id: "03",
+    name: "NAZAROVA NILUFAR",
+    project: "AEGIS PRO",
+    author: "NAZAROVA NILUFAR",
+    bio: "Raqamli muhitda xavfsizlikni kuchaytirishga qaratilgan innovatsion cybersecurity loyihasi.",
+    image: "",
+    progress: 8,
+    rating: 4.9,
+    vip: false
+  }
+];
+
+const initialResults = [
+  {
+    id: "01",
+    name: "XOSHIMOV XOSHIMXON",
+    project: "NOVA GUARD",
+    votes: 8889,
+    percent: 33.36
+  },
+  {
+    id: "02",
+    name: "JULIYEV MUHAMMAD",
+    project: "VANGUARD-X",
+    votes: 8885,
+    percent: 33.34
+  },
+  {
+    id: "03",
+    name: "NAZAROVA NILUFAR",
+    project: "AEGIS PRO",
+    votes: 8883,
+    percent: 33.30
+  }
+];
+
+function Visual({ index, image, project }) {
+  if (image) {
+    return (
+      <div className="visual has-image">
+        <img
+          src={image}
+          alt={project}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className="visual">
+      <div className="vicon">
+        {index === 0 ? (
+          <Shield />
+        ) : index === 1 ? (
+          <Activity />
+        ) : (
+          <Zap />
+        )}
+      </div>
+    </div>
+  );
+}
+
+function TaskStars({ progress, interactive = false, onToggle }) {
+  return (
+    <div
+      className={
+        interactive ? "taskstars adminstars" : "taskstars"
+      }
+    >
+      {Array.from({ length: TASK_COUNT }, (_, i) => {
+        const done = i < progress;
+
+        return (
+          <button
+            key={i}
+            type="button"
+            className={done ? "done" : ""}
+            disabled={!interactive}
+            onClick={() => interactive && onToggle?.(i)}
+            aria-label={`Topshiriq ${i + 1}`}
+          >
+            {done ? "★" : "☆"}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function Modal({ candidate, progress, close }) {
+  const percent = Math.round((progress / TASK_COUNT) * 100);
+
+  return (
+    <div
+      className="modalbg"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) close();
+      }}
+    >
+      <div className="modal">
+        <div className="modalhead">
+          <div>
+            <p>CYBERSTAT / FINAL 02 / FINALIST</p>
+            <h2>LOYIHA PROFILI</h2>
+          </div>
+
+          <button className="close" onClick={close}>
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="detail">
+          <div className="detailvisual">
+            {candidate.image ? (
+              <img
+                src={candidate.image}
+                alt={candidate.project}
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  objectFit: "cover",
+                  borderRadius: 12
+                }}
+              />
+            ) : (
+              <div className="detailicon">
+                <Shield size={45} />
+              </div>
+            )}
+          </div>
+
+          <div>
+            <span className="status">FINALIST</span>
+
+            <h3>{candidate.project}</h3>
+
+            <p className="bio">
+              Muallif: <b>{candidate.author}</b>
+            </p>
+
+            <p className="bio">{candidate.bio}</p>
+
+            <TaskStars progress={progress} />
+
+            <div className="bar">
+              <i style={{ width: `${percent}%` }} />
+            </div>
+
+            <div className="infogrid">
+              <div className="ibox">
+                <small>TOPSHIRIQ HOLATI</small>
+                <b>
+                  {progress} / {TASK_COUNT}
+                </b>
+              </div>
+
+              <div className="ibox">
+                <small>BAJARILISH</small>
+                <b>{percent}%</b>
+              </div>
+
+              <div className="ibox">
+                <small>REYTING</small>
+                <b>{candidate.rating.toFixed(1)} / 5.0</b>
+              </div>
+
+              <div className="ibox">
+                <small>HOLAT</small>
+                <b>JARAYONDA</b>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AdminPanel({
+  finalists,
+  results,
+  taskProgress,
+  updateFinalist,
+  updateResult,
+  toggleTask,
+  saveChanges,
+  uploadFinalistImage
+}) {
+  return (
+    <section className="section container adminsection" id="admin">
+      <div className="head">
+        <div>
+          <small>ADMIN / MARKAZIY BOSHQARUV</small>
+
+          <h2>ADMIN PANELI</h2>
+
+          <p>
+            CYBERSTAT platformasining barcha asosiy ma’lumotlari shu
+            yerda boshqariladi.
+          </p>
+        </div>
+
+        <span className="status">
+          <LockKeyhole size={11} />
+          FAQAT ADMIN
+        </span>
+      </div>
+
+      {/* FINALISTLAR */}
+      <div className="adminblock">
+        <div className="adminblockhead">
+          <div>
+            <h3>FINALISTLAR BOSHQARUVI</h3>
+            <p>Rasm, ism, loyiha va tavsifni boshqaring.</p>
+          </div>
+        </div>
+
+        <div className="admincards">
+          {finalists.map((candidate) => (
+            <div className="admincard finalistadmin" key={candidate.id}>
+              <div className="adminidentity">
+                <div className="adminimage">
+                  {candidate.image ? (
+                    <img
+                      src={candidate.image}
+                      alt={candidate.project}
+                    />
+                  ) : (
+                    <ImageIcon size={26} />
+                  )}
+                </div>
+
+                <div>
+                  <span className="rank">#{candidate.id}</span>
+                  <div className="author">{candidate.name}</div>
+                  <h3>{candidate.project}</h3>
+                </div>
+              </div>
+
+              <div className="adminform">
+                <label>
+                  FINALIST ISMI
+                  <input
+                    value={candidate.name}
+                    onChange={(e) =>
+                      updateFinalist(candidate.id, "name", e.target.value)
+                    }
+                  />
+                </label>
+
+                <label>
+                  LOYIHA NOMI
+                  <input
+                    value={candidate.project}
+                    onChange={(e) =>
+                      updateFinalist(
+                        candidate.id,
+                        "project",
+                        e.target.value
+                      )
+                    }
+                  />
+                </label>
+
+                <label>
+                  MUALLIF
+                  <input
+                    value={candidate.author}
+                    onChange={(e) =>
+                      updateFinalist(
+                        candidate.id,
+                        "author",
+                        e.target.value
+                      )
+                    }
+                  />
+                </label>
+
+                <label>
+                  LOYIHA TAVSIFI
+                  <textarea
+                    value={candidate.bio}
+                    onChange={(e) =>
+                      updateFinalist(
+                        candidate.id,
+                        "bio",
+                        e.target.value
+                      )
+                    }
+                  />
+                </label>
+
+                <label>
+                  FINALIST RASMI
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+
+                      if (file) {
+                        uploadFinalistImage(candidate.id, file);
+                      }
+
+                      e.target.value = "";
+                    }}
+                  />
+                </label>
+
+                <label>
+                  RASM URL
+                  <input
+                    value={candidate.image}
+                    placeholder="Supabase Storage URL"
+                    onChange={(e) =>
+                      updateFinalist(
+                        candidate.id,
+                        "image",
+                        e.target.value
+                      )
+                    }
+                  />
+                </label>
+
+                <label>
+                  REYTING
+                  <input
+                    type="number"
+                    min="0"
+                    max="5"
+                    step="0.1"
+                    value={candidate.rating}
+                    onChange={(e) =>
+                      updateFinalist(
+                        candidate.id,
+                        "rating",
+                        Number(e.target.value)
+                      )
+                    }
+                  />
+                </label>
+
+                <label className="checkboxline">
+                  <input
+                    type="checkbox"
+                    checked={candidate.vip}
+                    onChange={(e) =>
+                      updateFinalist(
+                        candidate.id,
+                        "vip",
+                        e.target.checked
+                      )
+                    }
+                  />
+                  <span>VIP NOMINANT</span>
+                </label>
+              </div>
+
+              <div className="adminactions">
+                <button
+                  className="secondary"
+                  onClick={saveChanges}
+                >
+                  <Save size={15} />
+                  SAQLASH
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* FINAL 2 */}
+      <div className="adminblock">
+        <div className="adminblockhead">
+          <div>
+            <h3>FINAL 2 — TOPSHIRIQLAR BOSHQARUVI</h3>
+            <p>
+              Har bir finalist uchun 10 ta topshiriqni admin
+              belgilaydi.
+            </p>
+          </div>
+
+          <span className="status">
+            10 TA TOPSHIRIQ
+          </span>
+        </div>
+
+        <div className="admincards">
+          {finalists.map((candidate) => (
+            <div className="admincard" key={candidate.id}>
+              <div>
+                <span className="rank">#{candidate.id}</span>
+
+                <div className="author">
+                  {candidate.name}
+                </div>
+
+                <h3>{candidate.project}</h3>
+              </div>
+
+              <div className="adminprogress">
+                <TaskStars
+                  progress={taskProgress[candidate.id] ?? 0}
+                  interactive
+                  onToggle={(index) =>
+                    toggleTask(candidate.id, index)
+                  }
+                />
+
+                <strong>
+                  {taskProgress[candidate.id] ?? 0} / {TASK_COUNT}
+                </strong>
+
+                <small>Topshiriqlar bajarilishi</small>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* FINAL 1 NATIJALARI */}
+      <div className="adminblock">
+        <div className="adminblockhead">
+          <div>
+            <h3>FINAL 1 NATIJALARI</h3>
+            <p>
+              Muzlatilgan natijalarni admin boshqaradi.
+            </p>
+          </div>
+
+          <span className="status">
+            <CheckCircle2 size={11} />
+            MUZLATILGAN
+          </span>
+        </div>
+
+        <div className="panel">
+          {results.map((result) => (
+            <div className="adminresult" key={result.id}>
+              <div className="adminresulttitle">
+                <b>#{result.id}</b>
+
+                <div>
+                  <strong>{result.name}</strong>
+                  <small>{result.project}</small>
+                </div>
+              </div>
+
+              <label>
+                OVOZLAR
+                <input
+                  type="number"
+                  value={result.votes}
+                  onChange={(e) =>
+                    updateResult(
+                      result.id,
+                      "votes",
+                      Number(e.target.value)
+                    )
+                  }
+                />
+              </label>
+
+              <label>
+                FOIZ
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.1"
+                  value={result.percent}
+                  onChange={(e) =>
+                    updateResult(
+                      result.id,
+                      "percent",
+                      Number(e.target.value)
+                    )
+                  }
+                />
+              </label>
+
+              <button
+                className="secondary"
+                onClick={saveChanges}
+              >
+                <Save size={14} />
+                SAQLASH
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+export default function CyberStatApp() {
+  const [active, setActive] = useState("home");
+  const [fullScreen, setFullScreen] = useState(null);
+  const [selected, setSelected] = useState(null);
+  const [adminMode, setAdminMode] = useState(false);
+  const [adminLoginOpen, setAdminLoginOpen] = useState(false);
+  const [adminEmail, setAdminEmail] = useState("");
+  const [adminPassword, setAdminPassword] = useState("");
+  const [adminLoading, setAdminLoading] = useState(false);
+  const [adminError, setAdminError] = useState("");
+  const [adminUser, setAdminUser] = useState(null);
+
+  const [finalists, setFinalists] = useState(initialFinalists);
+  const [results, setResults] = useState(initialResults);
+
+  const [taskProgress, setTaskProgress] = useState(
+    Object.fromEntries(
+      initialFinalists.map((c) => [c.id, c.progress])
+    )
+  );
+
+  const loadSupabaseData = async () => {
+    try {
+      const [finalistsResponse, resultsResponse, tasksResponse] =
+        await Promise.all([
+          supabase
+            .from("cyberstat_finalists")
+            .select(
+              "id,name,project_name,author_name,bio,image_url,rating,vip,active"
+            )
+            .eq("active", true)
+            .order("id"),
+
+          supabase
+            .from("cyberstat_final1_results")
+            .select(
+              "finalist_id,finalist_name,project_name,votes,percent,frozen"
+            )
+            .order("finalist_id"),
+
+          supabase
+            .from("cyberstat_final2_tasks")
+            .select("finalist_id,task_number,completed")
+            .order("finalist_id")
+            .order("task_number")
+        ]);
+
+      if (finalistsResponse.error) {
+        console.error(
+          "CYBERSTAT finalists error:",
+          finalistsResponse.error
+        );
+      }
+
+      if (resultsResponse.error) {
+        console.error(
+          "CYBERSTAT results error:",
+          resultsResponse.error
+        );
+      }
+
+      if (tasksResponse.error) {
+        console.error(
+          "CYBERSTAT tasks error:",
+          tasksResponse.error
+        );
+      }
+
+      if (finalistsResponse.data) {
+        const mappedFinalists = finalistsResponse.data.map((item) => ({
+          id: item.id,
+          name: item.name,
+          project: item.project_name,
+          author: item.author_name || "",
+          bio: item.bio || "",
+          image: item.image_url || "",
+          rating: Number(item.rating || 0),
+          vip: Boolean(item.vip),
+          progress: 0
+        }));
+
+        setFinalists(mappedFinalists);
+      }
+
+      if (resultsResponse.data) {
+        const mappedResults = resultsResponse.data.map((item) => ({
+          id: item.finalist_id,
+          name: item.finalist_name,
+          project: item.project_name,
+          votes: Number(item.votes || 0),
+          percent: Number(item.percent || 0),
+          frozen: Boolean(item.frozen)
+        }));
+
+        setResults(mappedResults);
+      }
+
+      if (tasksResponse.data) {
+        const progress = {};
+
+        tasksResponse.data.forEach((task) => {
+          if (!progress[task.finalist_id]) {
+            progress[task.finalist_id] = 0;
+          }
+
+          if (task.completed) {
+            progress[task.finalist_id] += 1;
+          }
+        });
+
+        setTaskProgress(progress);
+
+        setFinalists((current) =>
+          current.map((candidate) => ({
+            ...candidate,
+            progress: progress[candidate.id] ?? 0
+          }))
+        );
+      }
+    } catch (error) {
+      console.error("CYBERSTAT Supabase yuklash xatosi:", error);
+    }
+  };
+
+  useEffect(() => {
+    loadSupabaseData();
+
+    const channel = supabase
+      .channel("cyberstat-live")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "cyberstat_finalists"
+        },
+        loadSupabaseData
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "cyberstat_final2_tasks"
+        },
+        loadSupabaseData
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "cyberstat_final1_results"
+        },
+        loadSupabaseData
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  const go = (section) => {
+    setActive(section);
+
+    setTimeout(() => {
+      document
+        .getElementById(section)
+        ?.scrollIntoView({
+          behavior: "smooth",
+          block: "start"
+        });
+    }, 50);
+  };
+
+  const updateFinalist = (id, field, value) => {
+    setFinalists((prev) =>
+      prev.map((candidate) =>
+        candidate.id === id
+          ? { ...candidate, [field]: value }
+          : candidate
+      )
+    );
+  };
+
+  const updateResult = (id, field, value) => {
+    setResults((prev) =>
+      prev.map((result) =>
+        result.id === id
+          ? { ...result, [field]: value }
+          : result
+      )
+    );
+  };
+
+  const toggleTask = (id, index) => {
+    setTaskProgress((prev) => {
+      const current = prev[id] ?? 0;
+
+      const next =
+        index < current
+          ? index
+          : index === current
+          ? current + 1
+          : current;
+
+      return {
+        ...prev,
+        [id]: Math.max(
+          0,
+          Math.min(TASK_COUNT, next)
+        )
+      };
+    });
+  };
+
+  const uploadFinalistImage = async (finalistId, file) => {
+    try {
+      if (!file.type.startsWith("image/")) {
+        alert("Faqat rasm fayllarini yuklash mumkin.");
+        return;
+      }
+
+      const maxSize = 5 * 1024 * 1024;
+
+      if (file.size > maxSize) {
+        alert("Rasm hajmi 5 MB dan oshmasligi kerak.");
+        return;
+      }
+
+      const extension =
+        file.name.split(".").pop()?.toLowerCase() || "jpg";
+
+      const filePath =
+        `authors/${finalistId}-${Date.now()}.${extension}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from("candidate-images")
+        .upload(filePath, file, {
+          cacheControl: "3600",
+          upsert: false,
+          contentType: file.type
+        });
+
+      if (uploadError) {
+        throw uploadError;
+      }
+
+      const { data: publicData } = supabase.storage
+        .from("candidate-images")
+        .getPublicUrl(filePath);
+
+      if (!publicData?.publicUrl) {
+        throw new Error("Rasm URL olinmadi.");
+      }
+
+      updateFinalist(
+        finalistId,
+        "image",
+        publicData.publicUrl
+      );
+
+      alert("Finalist rasmi muvaffaqiyatli yuklandi.");
+    } catch (error) {
+      console.error("IMAGE UPLOAD ERROR:", error);
+      alert(
+        error?.message ||
+        "Rasmni yuklashda xatolik yuz berdi."
+      );
+    }
+  };
+
+  const saveChanges = async () => {
+    try {
+      for (const candidate of finalists) {
+        const { error: finalistError } = await supabase.rpc(
+          "cyberstat_admin_save_finalist",
+          {
+            p_id: candidate.id,
+            p_name: candidate.name,
+            p_project_name: candidate.project,
+            p_author_name: candidate.author || "",
+            p_bio: candidate.bio || "",
+            p_image_url: candidate.image || "",
+            p_rating: Number(candidate.rating || 0),
+            p_vip: Boolean(candidate.vip)
+          }
+        );
+
+        if (finalistError) {
+          throw finalistError;
+        }
+
+        const { error: taskError } = await supabase.rpc(
+          "cyberstat_admin_set_all_tasks",
+          {
+            p_finalist_id: candidate.id,
+            p_completed_count: taskProgress[candidate.id] ?? 0
+          }
+        );
+
+        if (taskError) {
+          throw taskError;
+        }
+      }
+
+      for (const result of results) {
+        const { error: resultError } = await supabase.rpc(
+          "cyberstat_admin_save_result",
+          {
+            p_finalist_id: result.id,
+            p_votes: Number(result.votes || 0),
+            p_percent: Number(result.percent || 0),
+            p_frozen: result.frozen !== false
+          }
+        );
+
+        if (resultError) {
+          throw resultError;
+        }
+      }
+
+      await loadSupabaseData();
+
+      alert("O‘zgarishlar Supabase bazasiga muvaffaqiyatli saqlandi.");
+    } catch (error) {
+      console.error("CYBERSTAT ADMIN SAVE ERROR:", error);
+
+      alert(
+        "Saqlashda xato: " +
+        (error?.message || "Noma'lum xato")
+      );
+    }
+  };
+
+  const openAdminPanel = async () => {
+    const { data } = await supabase.auth.getSession();
+
+    if (data?.session) {
+      const { data: adminCheck, error } = await supabase.rpc(
+        "cyberstat_admin_status"
+      );
+
+      if (!error && adminCheck === true) {
+        setAdminUser(data.session.user);
+        setAdminMode(true);
+        setActive("admin");
+        return;
+      }
+    }
+
+    setAdminLoginOpen(true);
+    setAdminError("");
+  };
+
+  const loginAdmin = async (event) => {
+    event.preventDefault();
+
+    setAdminLoading(true);
+    setAdminError("");
+
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: adminEmail.trim(),
+        password: adminPassword
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      const { data: isAdmin, error: adminError } =
+        await supabase.rpc("cyberstat_admin_status");
+
+      if (adminError) {
+        await supabase.auth.signOut();
+        throw adminError;
+      }
+
+      if (isAdmin !== true) {
+        await supabase.auth.signOut();
+        throw new Error("Bu hisobda admin huquqi mavjud emas.");
+      }
+
+      setAdminUser(data.user);
+      setAdminLoginOpen(false);
+      setAdminMode(true);
+      setActive("admin");
+      setAdminPassword("");
+    } catch (error) {
+      console.error("CYBERSTAT ADMIN LOGIN ERROR:", error);
+
+      setAdminError(
+        error?.message || "Login amalga oshmadi."
+      );
+    } finally {
+      setAdminLoading(false);
+    }
+  };
+
+  const logoutAdmin = async () => {
+    await supabase.auth.signOut();
+
+    setAdminUser(null);
+    setAdminMode(false);
+    setActive("home");
+  };
+
+  const nav = [
+    ["home", "Bosh sahifa"],
+    ["final2", "Final 2"],
+    ["results", "Natijalar"],
+  ];
+
+  const renderFinal2Screen = () => (
+    <div className="fullscreen-screen">
+      <div className="fullscreen-grid" />
+
+      <header className="fullscreen-header">
+        <button
+          className="fullscreen-back"
+          onClick={() => setFullScreen(null)}
+        >
+          ← ORQAGA
+        </button>
+
+        <div className="fullscreen-title">
+          <span>CYBERSTAT / FINAL 02</span>
+          <h1>FINAL 2 NI KUZATISH</h1>
+          <p>
+            Yopiq cyber challenge. Finalistlarning faqat
+            bajarilish progressi ommaga ko‘rsatiladi.
+          </p>
+        </div>
+
+        <div className="fullscreen-status">
+          <i />
+          JONLI
+        </div>
+      </header>
+
+      <main className="fullscreen-content">
+        <div className="fullscreen-section-head">
+          <div>
+            <small>FINAL 02 / YOPIQ CHALLENGE</small>
+            <h2>FINALISTLAR</h2>
+          </div>
+
+          <span className="status">
+            <LockKeyhole size={12} />
+            10 TA TOPSHIRIQ
+          </span>
+        </div>
+
+        <div className="fullscreen-cards">
+          {[...finalists]
+            .sort((a, b) => {
+              if (a.vip && !b.vip) return -1;
+              if (!a.vip && b.vip) return 1;
+              return Number(a.id) - Number(b.id);
+            })
+            .map((candidate, index) => {
+              const progress =
+                taskProgress[candidate.id] ?? 0;
+
+              const percent =
+                (progress / TASK_COUNT) * 100;
+
+              return (
+                <article
+                  className={
+                    "fullscreen-card " +
+                    (candidate.vip ? "vip-card" : "")
+                  }
+                  key={candidate.id}
+                  onClick={() => setSelected(candidate)}
+                >
+                  <div className="fullscreen-image">
+                    {candidate.image ? (
+                      <img
+                        src={candidate.image}
+                        alt={candidate.project}
+                      />
+                    ) : (
+                      <div className="fullscreen-image-placeholder">
+                        {index === 0 ? (
+                          <Shield size={50} />
+                        ) : index === 1 ? (
+                          <Activity size={50} />
+                        ) : (
+                          <Zap size={50} />
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="fullscreen-card-body">
+                    <div className="fullscreen-card-top">
+                      <span className="rank">
+                        #{candidate.id}
+                      </span>
+
+                      {candidate.vip && (
+)}
+                    </div>
+
+                    <small>FINALIST</small>
+
+                    <h3>{candidate.project}</h3>
+
+                    <strong>{candidate.name}</strong>
+
+                    <p>{candidate.bio}</p>
+
+                    <div className="fullscreen-progress-head">
+                      <span>TOPSHIRIQLAR</span>
+                      <b>
+                        {progress} / {TASK_COUNT}
+                      </b>
+                    </div>
+
+                    <TaskStars progress={progress} />
+
+                    <div className="fullscreen-progress">
+                      <i
+                        style={{
+                          width: `${percent}%`
+                        }}
+                      />
+                    </div>
+
+                    <div className="fullscreen-card-footer">
+                      <span>
+                        {percent}% BAJARILGAN
+                      </span>
+
+                      <span>
+                        {candidate.rating.toFixed(1)} / 5.0
+                      </span>
+                    </div>
+                  </div>
+                </article>
+              );
+            })}
+        </div>
+      </main>
+    </div>
+  );
+
+  const renderResultsScreen = () => (
+    <div className="fullscreen-screen results-screen">
+      <div className="fullscreen-grid" />
+
+      <header className="fullscreen-header">
+        <button
+          className="fullscreen-back"
+          onClick={() => setFullScreen(null)}
+        >
+          ← ORQAGA
+        </button>
+
+        <div className="fullscreen-title">
+          <span>CYBERSTAT / FINAL 01</span>
+          <h1>FINAL 1 NATIJALARI</h1>
+          <p>
+            Ovoz berish yakunlangan. Quyidagi natijalar
+            rasmiy va muzlatilgan.
+          </p>
+        </div>
+
+        <div className="fullscreen-status frozen">
+          <CheckCircle2 size={14} />
+          MUZLATILGAN
+        </div>
+      </header>
+
+      <main className="fullscreen-content">
+        <div className="fullscreen-section-head">
+          <div>
+            <small>FINAL 01 / RASMIY NATIJALAR</small>
+            <h2>YAKUNIY NATIJALAR</h2>
+          </div>
+
+          <span className="status">
+            <LockKeyhole size={12} />
+            OVOZ BERISH YOPIQ
+          </span>
+        </div>
+
+        <div className="results-fullscreen-grid">
+          {results
+            .slice()
+            .sort((a, b) => b.votes - a.votes)
+            .map((result, index) => {
+              const finalist = finalists.find(
+                (candidate) => candidate.id === result.id
+              );
+
+              return (
+                <article
+                  className={
+                    "result-fullscreen-card " +
+                    (index === 0 ? "winner-card" : "")
+                  }
+                  key={result.id}
+                >
+                  <div className="result-rank">
+                    #{index + 1}
+                  </div>
+
+                  <div className="result-photo">
+                    {finalist?.image ? (
+                      <img
+                        src={finalist.image}
+                        alt={result.project}
+                      />
+                    ) : (
+                      <Trophy size={32} />
+                    )}
+                  </div>
+
+                  <div className="result-info">
+                    <small>#{result.id} FINALIST</small>
+
+                    <h3>{result.project}</h3>
+
+                    <strong>{result.name}</strong>
+
+                    <div className="result-bar">
+                      <i
+                        style={{
+                          width: `${result.percent}%`
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="result-number">
+                    <strong>
+                      {result.votes.toLocaleString()}
+                    </strong>
+
+                    <span>{result.percent}%</span>
+                  </div>
+
+                  {index === 0 && (
+                    <div className="winner-label">
+                      ★ 1-O‘RIN · VIP NOMINANT
+                    </div>
+                  )}
+                </article>
+              );
+            })}
+        </div>
+{(() => {
+            const vip = finalists.find(
+              (candidate) => candidate.vip
+            );
+
+            return vip ? (
+
+            ) : (
+              <span>VIP belgilanmagan</span>
+            );
+          })()}
+        </div>
+      </main>
+    </div>
+  );
+
+  return (
+    <div className="app">
+      <div className="grid" />
+      <div className="topline" />
+
+      <header className="nav">
+        <button
+          className="brand"
+          onClick={() => go("home")}
+        >
+          <span className="logo">
+            <Shield />
+          </span>
+
+          <span>
+            <strong>CYBERSTAT</strong>
+            <small>DIGITAL COMPETITION ARENA</small>
+          </span>
+        </button>
+
+        <nav className="links">
+          {nav.map(([id, label]) => (
+            <button
+              className={active === id ? "active" : ""}
+              onClick={() => go(id)}
+              key={id}
+            >
+              {label}
+            </button>
+          ))}
+        </nav>
+
+        <span className="live">
+          <i className="dot" />
+          JONLI
+        </span>
+
+        <button
+          className={
+            adminMode
+              ? "admin active"
+              : "admin"
+          }
+          onClick={openAdminPanel}
+        >
+          ADMIN PANELI
+        </button>
+      </header>
+
+      {adminLoginOpen && (
+        <div
+          className="modal-backdrop"
+          onClick={() => {
+            if (!adminLoading) {
+              setAdminLoginOpen(false);
+              setAdminError("");
+            }
+          }}
+        >
+          <div
+            className="modal"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="modal-head">
+              <div>
+                <span className="eyebrow">CYBERSTAT SECURITY</span>
+                <h2>ADMIN KIRISH</h2>
+              </div>
+
+              <button
+                className="iconbtn"
+                onClick={() => {
+                  if (!adminLoading) {
+                    setAdminLoginOpen(false);
+                    setAdminError("");
+                  }
+                }}
+              >
+                ×
+              </button>
+            </div>
+
+            <form onSubmit={loginAdmin}>
+              <label>
+                ADMIN EMAIL
+                <input
+                  type="email"
+                  value={adminEmail}
+                  onChange={(event) =>
+                    setAdminEmail(event.target.value)
+                  }
+                  placeholder="admin@cyberstat.uz"
+                  autoComplete="username"
+                  required
+                />
+              </label>
+
+              <label>
+                PAROL
+                <input
+                  type="password"
+                  value={adminPassword}
+                  onChange={(event) =>
+                    setAdminPassword(event.target.value)
+                  }
+                  placeholder="••••••••"
+                  autoComplete="current-password"
+                  required
+                />
+              </label>
+
+              {adminError && (
+                <div className="errorbox">
+                  {adminError}
+                </div>
+              )}
+
+              <button
+                className="primary"
+                type="submit"
+                disabled={adminLoading}
+              >
+                {adminLoading
+                  ? "TEKSHIRILMOQDA..."
+                  : "ADMIN SIFATIDA KIRISH"}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      <main>
+        {/* HERO */}
+        <section
+          className="hero container"
+          id="home"
+        >
+          <div>
+            <div className="kicker">
+              <i />
+              KIBERXAVFSIZLIK × INNOVATSIYA × KELAJAK
+            </div>
+
+            <h1>CYBERSTAT</h1>
+
+            <h2>DIGITAL COMPETITION ARENA</h2>
+
+            <p>
+              Yangi avlod kiberxavfsizlik mutaxassislarini
+              aniqlash va rivojlantirish uchun tashkil
+              etilgan professional final platformasi.
+            </p>
+
+            <div className="actions">
+              <button
+                className="primary"
+                onClick={() => setFullScreen("final2")}
+              >
+                <Eye size={15} />
+                FINAL 2 NI KUZATISH
+                <ArrowRight size={15} />
+              </button>
+
+              <button
+                className="secondary"
+                onClick={() => setFullScreen("results")}
+              >
+                <BarChart3 size={15} />
+                NATIJALAR
+              </button>
+            </div>
+          </div>
+
+          <div className="hero-art">
+            <div className="orbit">
+              <div className="core" />
+            </div>
+
+            <div className="final">
+              <small>FINAL 02</small>
+
+              <h3>YOPIQ KIBER CHALLENGE</h3>
+
+              <p>
+                Finalistlar yopiq amaliy topshiriqlar asosida
+                musobaqani davom ettirmoqda.
+              </p>
+
+              <div className="meta">
+                <div>
+                  <span>FINAL 1</span>
+                  <b style={{ color: "var(--cyan)" }}>
+                    YAKUNLANDI
+                  </b>
+                </div>
+
+                <div>
+                  <span>FINAL 2</span>
+                  <b style={{ color: "var(--violet)" }}>
+                    DAVOM ETMOQDA
+                  </b>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* STATS */}
+        <section className="container stats">
+          <div className="stat">
+            <small>FINAL 1</small>
+            <b>YAKUNLANDI</b>
+            <strong>Ovoz berish bosqichi tugadi</strong>
+          </div>
+
+          <div className="stat">
+            <small>OVOZ BERISH</small>
+            <b>YOPIQ</b>
+            <strong>Yangi ovozlar qabul qilinmaydi</strong>
+          </div>
+
+          <div className="stat gold">
+            <small>VIP NOMINANT</small>
+
+            <b>
+              {finalists.find((x) => x.vip)?.id || "—"}
+            </b>
+
+            <strong>
+              {finalists.find((x) => x.vip)?.project ||
+                "VIP belgilanmagan"}
+              {" · "}
+              {finalists.find((x) => x.vip)?.name || ""}
+            </strong>
+          </div>
+
+          <div className="stat">
+            <small>FINAL 2</small>
+            <b>JONLI</b>
+            <strong>Yopiq cyber challenge</strong>
+          </div>
+        </section>
+
+
+
+
+
+
+      </main>
+
+      {/* ADMIN */}
+      {adminMode && (
+        <AdminPanel
+          finalists={finalists}
+          results={results}
+          taskProgress={taskProgress}
+          updateFinalist={updateFinalist}
+          updateResult={updateResult}
+          toggleTask={toggleTask}
+          saveChanges={saveChanges}
+          uploadFinalistImage={uploadFinalistImage}
+        />
+      )}
+
+      {fullScreen === "final2" && renderFinal2Screen()}
+      {fullScreen === "results" && renderResultsScreen()}
+
+      <footer className="footer">
+        <div className="container footerin">
+          <span>
+            CYBERSTAT · DIGITAL COMPETITION ARENA
+          </span>
+
+          <span>
+            XAVFSIZ · MARKAZLASHGAN · REAL VAQT
+          </span>
+        </div>
+      </footer>
+
+      <nav className="mobile">
+        {nav.map(([id, label]) => (
+          <button
+            className={
+              active === id ? "active" : ""
+            }
+            onClick={() => go(id)}
+            key={id}
+          >
+            {id === "home"
+              ? "⌂"
+              : id === "final2"
+              ? "◉"
+              : id === "results"
+              ? "▣"
+              : "★"}
+            <br />
+            {label}
+          </button>
+        ))}
+      </nav>
+
+      {selected && (
+        <Modal
+          candidate={selected}
+          progress={
+            taskProgress[selected.id] ?? 0
+          }
+          close={() => setSelected(null)}
+        />
+      )}
+    </div>
+  );
+}
