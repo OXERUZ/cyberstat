@@ -15,14 +15,14 @@ const defaults={
   heroLine:"KIBERXAVFSIZLIK × INNOVATSIYA × KELAJAK"
  },
  finalists:[
-  {id:"auto_c1",candidateId:"c1",name:"XOSHIMOV XOSHIMXON",project:"VANGUARD-X",bio:"Kiberxavfsizlik yo‘nalishidagi amaliy loyiha. Final 1 g‘olibi va Final 2 VIP nominanti.",image:"assets/portrait-gold.svg",vip:true,color:"gold",tasks:[true,true,true,true,true,true,false,false,false,false]},
-  {id:"auto_c2",candidateId:"c2",name:"JULIYEV MUHAMMAD",project:"NEURAL SHIELD",bio:"Cybersecurity loyihasi.",image:"assets/portrait-blue.svg",vip:false,color:"blue",tasks:[true,true,true,true,false,false,false,false,false,false]},
-  {id:"auto_c3",candidateId:"c3",name:"NAZAROVA NILUFAR",project:"PHOENIX",bio:"Cybersecurity loyihasi.",image:"assets/portrait-purple.svg",vip:false,color:"purple",tasks:[true,true,false,false,false,false,false,false,false,false]}
+  {id:"auto_c1",candidateId:"c1",name:"XOSHIMOV XOSHIMXON",project:"VANGUARD-X",bio:"Kiberxavfsizlik yo‘nalishidagi amaliy loyiha. Final 1 g‘olibi va Final 2 VIP nominanti.",image:"assets/c1-xoshimxon.jpg",vip:true,color:"gold",tasks:[true,true,true,true,true,true,false,false,false,false]},
+  {id:"auto_c2",candidateId:"c2",name:"JULIYEV MUHAMMAD",project:"NEURAL SHIELD",bio:"Cybersecurity loyihasi.",image:"assets/c2-muhammad.jpg",vip:false,color:"blue",tasks:[true,true,true,true,false,false,false,false,false,false]},
+  {id:"auto_c3",candidateId:"c3",name:"NAZAROVA NILUFAR",project:"PHOENIX",bio:"Cybersecurity loyihasi.",image:"assets/c3-nilufar.jpg",vip:false,color:"purple",tasks:[true,true,false,false,false,false,false,false,false,false]}
  ],
  final1:[
-  {id:"c1",name:"XOSHIMOV XOSHIMXON",project:"VIP NOMZOD",vip:true,rating:5.0,bio:"Mobil qurilmalar va foydalanuvchilarning shaxsiy ma’lumotlarini kiber-xavflardan real vaqt rejimida himoya qilish uchun mo‘ljallangan, sun’iy intellekt (AI) texnologiyalariga asoslangan zamonaviy Android xavfsizlik tizimi.",image:"assets/portrait-gold.svg",votes:8889},
-  {id:"c2",name:"JULIYEV MUHAMMAD",project:"VANGUARD-X",vip:false,rating:5.0,bio:"Yangi va noma’lum kiber-tahdidlarni barvaqt aniqlovchi va yangi paydo bo‘layotgan kiber-tahdidlar haqida oldindan ogohlantiruvchi dastur. Interaktiv simulyatorlar orqali odamlarga so‘nggi firibgarlik usullaridan himoyalanishni o‘rgatadi.",image:"assets/portrait-blue.svg",votes:8885},
-  {id:"c3",name:"NAZAROVA NILUFAR",project:"AEGIS PRO",vip:false,rating:5.0,bio:"Mobil qurilmalar va ilovalar uchun kompleks qalqon. Mobil qurilmalarni kiber-xujumlar, zararli APK fayllar, SMS-firibgarliklar va soxta ilovalardan doimiy himoya qiladi. Oddiy tugmani bir bosish orqali to‘liq xavfsizlikni ta’minlaydi.",image:"assets/portrait-purple.svg",votes:8883}
+  {id:"c1",name:"XOSHIMOV XOSHIMXON",project:"VIP NOMZOD",vip:true,rating:5.0,bio:"Mobil qurilmalar va foydalanuvchilarning shaxsiy ma’lumotlarini kiber-xavflardan real vaqt rejimida himoya qilish uchun mo‘ljallangan, sun’iy intellekt (AI) texnologiyalariga asoslangan zamonaviy Android xavfsizlik tizimi.",image:"assets/c1-xoshimxon.jpg",votes:8889},
+  {id:"c2",name:"JULIYEV MUHAMMAD",project:"VANGUARD-X",vip:false,rating:5.0,bio:"Yangi va noma’lum kiber-tahdidlarni barvaqt aniqlovchi va yangi paydo bo‘layotgan kiber-tahdidlar haqida oldindan ogohlantiruvchi dastur. Interaktiv simulyatorlar orqali odamlarga so‘nggi firibgarlik usullaridan himoyalanishni o‘rgatadi.",image:"assets/c2-muhammad.jpg",votes:8885},
+  {id:"c3",name:"NAZAROVA NILUFAR",project:"AEGIS PRO",vip:false,rating:5.0,bio:"Mobil qurilmalar va ilovalar uchun kompleks qalqon. Mobil qurilmalarni kiber-xujumlar, zararli APK fayllar, SMS-firibgarliklar va soxta ilovalardan doimiy himoya qiladi. Oddiy tugmani bir bosish orqali to‘liq xavfsizlikni ta’minlaydi.",image:"assets/c3-nilufar.jpg",votes:8883}
  ],
  updatedAt:null
 };
@@ -121,7 +121,10 @@ function save(s){
 async function persistRemote(s){
  if(!supabaseClient) return;
  const{error}=await supabaseClient.from("cyberstat_state").upsert({id:1,data:s,updated_at:new Date().toISOString()});
- if(error){ console.error("Supabase saqlash xatosi:",error); if(typeof toast==="function") toast("Serverga saqlanmadi — internetni tekshiring"); }
+ if(error){
+  console.error("Supabase saqlash xatosi:",error);
+  if(typeof toast==="function") toast("Serverga saqlanmadi: "+(error.message||error.code||"noma'lum xato"));
+ }
 }
 
 function hasSupabaseConfig(){
@@ -173,12 +176,42 @@ function taskCircles(n){ return Array.from({length:TASK_COUNT},(_,i)=>`<div clas
 function colorClass(f){ return f.vip?"vip":(f.color==="purple"?"purple":""); }
 function totalVotes(s){ return s.final1.reduce((a,c)=>a+(Number(c.votes)||0),0); }
 
-function readImageFile(input,cb){
- const file=input.files && input.files[0]; if(!file) return;
- if(file.size>2*1024*1024){ toast("Rasm hajmi 2MB dan kichik bo‘lishi kerak"); return; }
+/* Rasmni siqib, <canvas> orqali JPEG Blob'ga aylantiradi (upload uchun). */
+function compressImageFile(file,cb){
+ if(file.size>12*1024*1024){ toast("Rasm hajmi 12MB dan kichik bo‘lishi kerak"); return; }
  const r=new FileReader();
- r.onload=()=>cb(r.result);
+ r.onload=()=>{
+  const img=new Image();
+  img.onload=()=>{
+   const MAX=900;
+   let w=img.width,h=img.height;
+   if(w>MAX||h>MAX){
+    if(w>=h){ h=Math.round(h*MAX/w); w=MAX; }
+    else{ w=Math.round(w*MAX/h); h=MAX; }
+   }
+   const canvas=document.createElement("canvas");
+   canvas.width=w; canvas.height=h;
+   const ctx=canvas.getContext("2d");
+   ctx.fillStyle="#000"; ctx.fillRect(0,0,w,h);
+   ctx.drawImage(img,0,0,w,h);
+   canvas.toBlob(blob=>{
+    if(!blob){ toast("Rasmni siqib bo‘lmadi"); return; }
+    cb(blob);
+   },"image/jpeg",0.85);
+  };
+  img.onerror=()=>{ toast("Rasmni o‘qib bo‘lmadi — fayl buzilgan bo‘lishi mumkin"); };
+  img.src=r.result;
+ };
+ r.onerror=()=>{ toast("Rasmni o‘qib bo‘lmadi"); };
  r.readAsDataURL(file);
+}
+function blobToDataUrl(blob){
+ return new Promise((resolve,reject)=>{
+  const r=new FileReader();
+  r.onload=()=>resolve(r.result);
+  r.onerror=reject;
+  r.readAsDataURL(blob);
+ });
 }
 
 function clock(){
@@ -438,15 +471,42 @@ function saveCandidate(id){
  save(s); renderAdmin();
  toast("Nomzod ma'lumotlari saqlandi — reyting va Final 2 tarkibi avtomatik yangilandi");
 }
+/* Rasm endi state (jsonb) ichiga base64 sifatida EMAS, balki Supabase
+   Storage'ga (bucket: candidate-photos) yuklanadi va faqat kichik URL
+   state'ga yoziladi. Aynan avvalgi versiyada har bir rasm base64 holida
+   to'g'ridan-to'g'ri "cyberstat_state" jadvaliga yozilar edi — bir nechta
+   rasm bilan bu qator hajmi tez orada bir necha MB'ga yetib, HAR QANDAY
+   keyingi saqlash (hatto oddiy matn o'zgarishi ham) statement-timeout /
+   xato bilan tugab, o'zgarishlar globalga yetib bormas edi. Storage'ga
+   o'tish shu muammoni tubdan hal qiladi. */
 function uploadCandidateImage(id,input){
- readImageFile(input,dataUrl=>{
-  const s=load(), c=s.final1.find(x=>x.id===id);
-  if(!c) return;
-  c.image=dataUrl;
-  syncFinalistsFromFinal1(s);
-  save(s); renderAdmin();
-  toast("Nomzod rasmi yangilandi");
+ const file=input.files && input.files[0];
+ if(!file) return;
+ compressImageFile(file,async blob=>{
+  toast("Rasm yuklanmoqda...");
+  try{
+   let imageValue;
+   if(supabaseClient){
+    const path=`${id}_${Date.now()}.jpg`;
+    const{error:upErr}=await supabaseClient.storage.from("candidate-photos").upload(path,blob,{contentType:"image/jpeg",upsert:true,cacheControl:"31536000"});
+    if(upErr) throw upErr;
+    const{data:pub}=supabaseClient.storage.from("candidate-photos").getPublicUrl(path);
+    imageValue=pub.publicUrl;
+   }else{
+    imageValue=await blobToDataUrl(blob);
+   }
+   const s=load(), c=s.final1.find(x=>x.id===id);
+   if(!c) return;
+   c.image=imageValue;
+   syncFinalistsFromFinal1(s);
+   save(s); renderAdmin();
+   toast("Nomzod rasmi yangilandi");
+  }catch(e){
+   console.error("Rasm yuklash xatosi:",e);
+   toast("Rasmni saqlab bo‘lmadi: "+(e.message||"noma'lum xato")+" — Storage bucket sozlanganini tekshiring");
+  }
  });
+ input.value="";
 }
 function addCandidate(){
  const s=load();

@@ -86,12 +86,20 @@ Shundan keyin har safar GitHub'ga `git push` qilsangiz, Vercel avtomatik qayta d
 
 ## Texnik eslatmalar
 
-- Rasm yuklash hozircha to'g'ridan-to'g'ri jadvalga (base64 formatda) saqlanadi —
-  kichik/o'rtacha loyihalar uchun yetarli (rasm ≤2MB). Katta miqyosda ishlatilsa,
-  Supabase Storage (fayl ombori) ga o'tish tavsiya etiladi — kerak bo'lsa buni ham
-  qo'shib beraman.
+- **(TUZATILDI) Rasm yuklash endi Supabase Storage orqali ishlaydi.** Avvalgi versiyada
+  rasm to'g'ridan-to'g'ri base64 formatda `cyberstat_state` jadvaliga yozilar edi —
+  bir nechta rasm bilan bu qator hajmi tez orada bir necha megabaytga chiqib, HAR
+  QANDAY keyingi saqlash (hatto oddiy switch bosish ham) xato bilan tugab, o'zgarish
+  saytga (globalga) yetib bormas edi. Aynan shu — sizda kuzatilgan "admin panelda
+  o'zgartirilsa globalga yetib bormayapti" xatosining sababi edi. Endi rasm alohida
+  `candidate-photos` bucket'iga yuklanadi, jadvalda esa faqat kichik URL saqlanadi.
+  **Bu ishlashi uchun `supabase-schema.sql` faylini SQL Editor'da qayta ishga
+  tushiring** (bucket va uning ruxsatlarini shu skript yaratadi).
 - Mobil va PC uchun butun sayt (bosh sahifa, Final 2 arena, Final 1 natijalari,
   admin panel) responsive qilib tekshirildi va sozlandi.
 - Agar `config.js` to'ldirilmagan bo'lsa, sayt local rejimda (faqat shu brauzerda)
   ishlashda davom etadi — hech narsa buzilmaydi, lekin markazlashgan sinxronizatsiya
   ishlamaydi.
+- Agar `supabase-schema.sql`'ni qayta ishga tushirsangiz, u Final 1/Final 2
+  ma'lumotlarini oxirgi yuborilgan skrinshotdagi holatga (rasmlar + bio + ovozlar)
+  qaytaradi — bu ataylab shunday qilingan.
