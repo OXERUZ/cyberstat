@@ -14,25 +14,503 @@ async function adminState(){const {data,error}=await supabase.rpc('admin_get_sta
 export default function CyberStatApp(){const [mode,setMode]=useState(typeof window!=='undefined'&&window.location.pathname.startsWith('/admin')?'admin':'public');return mode==='admin'?<AdminApp onPublic={()=>{history.pushState({},'', '/');setMode('public')}}/>:<PublicApp onAdmin={()=>{history.pushState({},'', '/admin');setMode('admin')}}/>}
 
 function PublicApp({onAdmin}){
- const [data,setData]=useState({candidates:[],settings:FALLBACK,participants:0}),[loading,setLoading]=useState(true),[error,setError]=useState(''),[selected,setSelected]=useState(null),[voteOpen,setVoteOpen]=useState(false),[voted,setVoted]=useState(false),[notice,setNotice]=useState(''),[syncAt,setSyncAt]=useState(null),[publicMenu,setPublicMenu]=useState(null);
- const sync=useCallback(async()=>{try{const d=await publicState();setData(d);setSyncAt(new Date());setError('')}catch(e){console.error(e);setError(errText(e))}finally{setLoading(false)}},[]);
- useEffect(()=>{sync();const ch=supabase.channel('cyberstat-public-live').on('postgres_changes',{event:'*',schema:'public',table:'candidates'},sync).on('postgres_changes',{event:'*',schema:'public',table:'survey_settings'},sync).on('postgres_changes',{event:'*',schema:'public',table:'survey_stats'},sync).subscribe();return()=>supabase.removeChannel(ch)},[sync]);
- const total=useMemo(()=>data.candidates.reduce((a,c)=>a+Number(c.votes||0),0),[data.candidates]);
- const openVoting=()=>setVoteOpen(true);
- const vote=async()=>{if(!selected||voted||data.settings.status!=='FAOL')return;try{await voterSession();const {data:r,error:e}=await supabase.rpc('cast_vote',{p_candidate_id:selected.id});if(e)throw e;if(!r?.ok)throw new Error('VOTE_NOT_CONFIRMED');setVoted(true);setSelected(null);setNotice('Ovozingiz muvaffaqiyatli qayd etildi.');await sync()}catch(e){setNotice(String(e?.message||'').includes('ALREADY_VOTED')?'Siz avval ovoz bergansiz.':'Ovoz qabul qilinmadi: '+errText(e))}};
- if(loading)return <Loading/>; const s=data.settings||FALLBACK,closed=s.status==='YAKUNLANGAN',visible=s.results_visible!==false;
- return <div className="app"><CyberBg/><header className="nav"><div className="logo"><span><ShieldCheck/></span><b>{s.project_name||'CYBERSTAT'}</b><small>FINAL ARENA</small></div><div className="nav-live"><i/> {closed?'FINAL CLOSED':'LIVE ARENA'}</div><nav><a href="#arena">ARENA</a><button className="nav-tab" onClick={()=>setPublicMenu('candidates')}>NOMZODLAR</button><button className="nav-tab" onClick={()=>setPublicMenu('rating')}>REYTING</button></nav><button className="nav-btn" onClick={openVoting}><Vote/> OVOZ BERISH</button></header>
- {error&&<div className="alert error"><span>{error}</span><button onClick={sync}><RefreshCw/> QAYTA URINISH</button></div>}{notice&&<div className="alert success"><Check/><span>{notice}</span><button onClick={()=>setNotice('')}><X/></button></div>}
- <main><section id="arena" className="arena"><div className="arena-copy"><div className="kicker"><span>● {s.site_badge||'FINAL EVENT'}</span><em>{closed?'FINAL YAKUNLANDI':s.status==='TOXTATILGAN'?'VAQTINCHA TO‘XTATILGAN':'LIVE VOTING'}</em></div><h1>{s.project_name||'CYBERSTAT'}<br/><strong>FINAL BOSQICHI</strong></h1><p>{s.hero_description||'Yakuniy bosqichda o‘zingiz munosib deb bilgan finalistga ovoz bering.'}</p><div className="hero-actions"><button className="primary" disabled={s.status!=='FAOL'} onClick={openVoting}><Zap/> {closed?'FINAL YAKUNLANGAN':s.status==='TOXTATILGAN'?'OVOZ BERISH TO‘XTATILGAN':'OVOZ BERISH'} <ArrowRight/></button><span className="sync-label"><i/> SERVER {syncAt?'SINXRON':'ULANISH'}</span></div></div><div className="arena-panel"><div className="panel-top"><span><i/> LIVE ARENA</span><Countdown end={s.countdown_end?new Date(s.countdown_end):null} closed={s.status==='YAKUNLANGAN'}/></div><div className="radar"><div className="radar-ring r1"/><div className="radar-ring r2"/><div className="radar-core"><Trophy/><b>—</b><small>VOTING</small></div></div><div className="panel-leader"><small>OVOZ BERISH</small><strong>Finalistni tanlang</strong><span>Ovoz berish menyusini oching</span></div></div></section>
- <section className="metrics"><Metric label="JAMI OVOZ" value={total}/><Metric label="ISHTIROKCHI" value={data.participants}/><Metric label="FINALIST" value={data.candidates.length}/><Metric label="HOLAT" value={closed?'CLOSED':s.status==='TOXTATILGAN'?'PAUSE':'LIVE'}/></section>
- 
- 
- <div className="public-note">{s.public_notice||'Ovoz berish uchun yuqoridagi yoki markaziy OVOZ BERISH tugmasidan foydalaning.'}</div></main>
- {voteOpen&&<VotingMenu candidates={data.candidates} status={s.status} voted={voted} onClose={()=>setVoteOpen(false)} onSelect={c=>{setSelected(c);setVoteOpen(false)}}/>}
- {publicMenu==='candidates'&&<PublicCandidatesMenu candidates={data.candidates} total={total} onClose={()=>setPublicMenu(null)}/>}
- {publicMenu==='rating'&&<PublicRatingMenu candidates={data.candidates} total={total} participants={data.participants} onClose={()=>setPublicMenu(null)}/>}
- <footer><span>{s.footer_left||'CYBERSTAT FINAL ARENA'}</span><span>{s.footer_right||'SECURE • CENTRAL • REAL-TIME'}</span><button className="admin-link" onClick={onAdmin}>ADMIN</button></footer>{selected&&<Confirm c={selected} onClose={()=>setSelected(null)} onConfirm={vote}/>}</div>
+  const [data,setData]=useState({
+    candidates:[],
+    settings:FALLBACK,
+    participants:0
+  });
+
+  const [loading,setLoading]=useState(true);
+  const [error,setError]=useState('');
+  const [selected,setSelected]=useState(null);
+  const [voteOpen,setVoteOpen]=useState(false);
+  const [voted,setVoted]=useState(false);
+  const [notice,setNotice]=useState('');
+  const [syncAt,setSyncAt]=useState(null);
+  const [publicMenu,setPublicMenu]=useState(null);
+
+  const sync=useCallback(async()=>{
+    try{
+      const d=await publicState();
+      setData(d);
+      setSyncAt(new Date());
+      setError('');
+    }catch(e){
+      console.error(e);
+      setError(errText(e));
+    }finally{
+      setLoading(false);
+    }
+  },[]);
+
+  useEffect(()=>{
+    sync();
+
+    const ch=supabase
+      .channel('cyberstat-public-live')
+      .on(
+        'postgres_changes',
+        {event:'*',schema:'public',table:'candidates'},
+        sync
+      )
+      .on(
+        'postgres_changes',
+        {event:'*',schema:'public',table:'survey_settings'},
+        sync
+      )
+      .on(
+        'postgres_changes',
+        {event:'*',schema:'public',table:'survey_stats'},
+        sync
+      )
+      .subscribe();
+
+    return()=>supabase.removeChannel(ch);
+  },[sync]);
+
+  const active=useMemo(
+    ()=>data.candidates.filter(c=>c.active!==false),
+    [data.candidates]
+  );
+
+  const ranked=useMemo(
+    ()=>[...active].sort(
+      (a,b)=>Number(b.votes||0)-Number(a.votes||0)
+    ),
+    [active]
+  );
+
+  const total=useMemo(
+    ()=>active.reduce((a,c)=>a+Number(c.votes||0),0),
+    [active]
+  );
+
+  const leader=ranked[0];
+
+  const openVoting=()=>{
+    setVoteOpen(true);
+  };
+
+  const vote=async()=>{
+    if(!selected || voted || data.settings.status!=='FAOL') return;
+
+    try{
+      await voterSession();
+
+      const {data:r,error:e}=await supabase.rpc(
+        'cast_vote',
+        {p_candidate_id:selected.id}
+      );
+
+      if(e) throw e;
+      if(!r?.ok) throw new Error('VOTE_NOT_CONFIRMED');
+
+      setVoted(true);
+      setSelected(null);
+      setNotice('Ovozingiz muvaffaqiyatli qayd etildi.');
+      await sync();
+    }catch(e){
+      setNotice(
+        String(e?.message||'').includes('ALREADY_VOTED')
+          ? 'Siz avval ovoz bergansiz.'
+          : 'Ovoz qabul qilinmadi: '+errText(e)
+      );
+    }
+  };
+
+  if(loading) return <Loading/>;
+
+  const s=data.settings||FALLBACK;
+  const closed=s.status==='YAKUNLANGAN';
+  const paused=s.status==='TOXTATILGAN';
+  const visible=s.results_visible!==false;
+
+  return (
+    <div className="app cyberstat-public">
+
+      <CyberBg/>
+
+      <header className="nav cyber-nav">
+
+        <div className="logo">
+          <span><ShieldCheck/></span>
+          <b>{s.project_name||'CYBERSTAT'}</b>
+          <small>FINAL 02 / CYBERSECURITY</small>
+        </div>
+
+        <div className="nav-live">
+          <i className={closed?'offline':''}/>
+          {closed?'FINAL CLOSED':paused?'PAUSED':'LIVE SYSTEM'}
+        </div>
+
+        <nav>
+          <a href="#arena">ARENA</a>
+          <button
+            className="nav-tab"
+            onClick={()=>setPublicMenu('candidates')}
+          >
+            FINALISTS
+          </button>
+          <button
+            className="nav-tab"
+            onClick={()=>setPublicMenu('rating')}
+          >
+            RANKING
+          </button>
+        </nav>
+
+        <button className="nav-btn" onClick={openVoting}>
+          <Vote/>
+          VOTE
+        </button>
+
+      </header>
+
+      {error&&(
+        <div className="alert error">
+          <span>{error}</span>
+          <button onClick={sync}>
+            <RefreshCw/> RETRY
+          </button>
+        </div>
+      )}
+
+      {notice&&(
+        <div className="alert success">
+          <Check/>
+          <span>{notice}</span>
+          <button onClick={()=>setNotice('')}>
+            <X/>
+          </button>
+        </div>
+      )}
+
+      <main>
+
+        {/* HERO */}
+
+        <section id="arena" className="cs-hero">
+
+          <div className="cs-hero-content">
+
+            <div className="cs-eyebrow">
+              <span>FINAL 02</span>
+              <i/>
+              <b>{closed?'FINAL COMPLETE':'LIVE OPERATION'}</b>
+            </div>
+
+            <div className="cs-command">
+              <span>CYBERSTAT</span>
+              <small>SECURITY CHAMPIONSHIP</small>
+            </div>
+
+            <h1>
+              FINAL
+              <strong>02</strong>
+            </h1>
+
+            <p className="cs-hero-text">
+              {s.hero_description||
+                'Kiberxavfsizlik final bosqichida finalistlarni kuzating va munosib nomzodga ovoz bering.'
+              }
+            </p>
+
+            <div className="cs-hero-actions">
+
+              <button
+                className="cs-main-button"
+                disabled={s.status!=='FAOL'}
+                onClick={openVoting}
+              >
+                <Zap/>
+                {closed?'FINAL COMPLETE':
+                  paused?'VOTING PAUSED':
+                  'ENTER THE ARENA'}
+                <ArrowRight/>
+              </button>
+
+              <div className="cs-system-status">
+                <i/>
+                SYSTEM {syncAt?'SYNCHRONIZED':'CONNECTING'}
+              </div>
+
+            </div>
+
+            <div className="cs-mini-stats">
+              <div>
+                <small>FINALISTS</small>
+                <b>{active.length}</b>
+              </div>
+              <div>
+                <small>TOTAL VOTES</small>
+                <b>{fmt(total)}</b>
+              </div>
+              <div>
+                <small>PARTICIPANTS</small>
+                <b>{fmt(data.participants)}</b>
+              </div>
+            </div>
+
+          </div>
+
+          <div className="cs-hero-visual">
+
+            <div className="cs-visual-grid"/>
+
+            <div className="cs-image-frame">
+
+              <img
+                src="/assets/reference-hero.png"
+                alt="CyberStat Final 02"
+              />
+
+              <div className="cs-image-overlay"/>
+
+              <div className="cs-corner tl"/>
+              <div className="cs-corner tr"/>
+              <div className="cs-corner bl"/>
+              <div className="cs-corner br"/>
+
+              <div className="cs-image-label">
+                <span>CYBERSTAT</span>
+                <b>OPERATION / 02</b>
+              </div>
+
+            </div>
+
+            <div className="cs-orbit">
+              <span/>
+              <span/>
+              <span/>
+            </div>
+
+          </div>
+
+        </section>
+
+        {/* LIVE BAR */}
+
+        <section className="cs-livebar">
+
+          <div className="cs-live-title">
+            <i/>
+            LIVE ARENA
+          </div>
+
+          <div>
+            <small>STATUS</small>
+            <b>{closed?'CLOSED':paused?'PAUSED':'ONLINE'}</b>
+          </div>
+
+          <div>
+            <small>LEADER</small>
+            <b>{leader?.name||'—'}</b>
+          </div>
+
+          <div>
+            <small>LIVE VOTES</small>
+            <b>{fmt(total)}</b>
+          </div>
+
+          <div>
+            <small>SERVER</small>
+            <b>REAL-TIME</b>
+          </div>
+
+        </section>
+
+        {/* FINALISTS */}
+
+        <section className="cs-section">
+
+          <div className="cs-section-head">
+            <div>
+              <span>01 / FINALIST NETWORK</span>
+              <h2>FINALISTS</h2>
+              <p>
+                Final 02 ishtirokchilari va ularning loyihalarini ko‘ring.
+                Natijalar serverdan real vaqtda yangilanadi.
+              </p>
+            </div>
+
+            <div className="cs-section-mark">
+              <b>{String(active.length).padStart(2,'0')}</b>
+              <span>ACTIVE<br/>NODES</span>
+            </div>
+          </div>
+
+          {active.length===0 ? (
+            <div className="cs-empty">
+              <ShieldCheck/>
+              <b>NO ACTIVE FINALISTS</b>
+              <span>Finalistlar admin panel orqali qo‘shiladi.</span>
+            </div>
+          ) : (
+
+            <div className="cs-finalist-grid">
+
+              {ranked.map((c,i)=>(
+                <Candidate
+                  key={c.id}
+                  c={c}
+                  rank={i+1}
+                  total={total}
+                  disabled={s.status!=='FAOL'}
+                  select={()=>{
+                    setSelected(c);
+                  }}
+                />
+              ))}
+
+            </div>
+
+          )}
+
+        </section>
+
+        {/* RANKING */}
+
+        {visible&&ranked.length>0&&(
+          <section className="cs-section cs-ranking-section">
+
+            <div className="cs-section-head">
+              <div>
+                <span>02 / LIVE INTELLIGENCE</span>
+                <h2>RANKING</h2>
+                <p>
+                  Ovozlar bo‘yicha jonli reyting. Har bir o‘zgarish
+                  markaziy serverdan avtomatik yangilanadi.
+                </p>
+              </div>
+
+              <div className="cs-live-chip">
+                <i/> LIVE
+              </div>
+            </div>
+
+            <div className="cs-ranking-list-public">
+
+              {ranked.map((c,i)=>(
+                <RankRow
+                  key={c.id}
+                  c={c}
+                  rank={i+1}
+                  total={total}
+                />
+              ))}
+
+            </div>
+
+          </section>
+        )}
+
+        {/* PODIUM */}
+
+        {closed&&visible&&ranked.length>0&&(
+          <Podium candidates={ranked}/>
+        )}
+
+        {/* FINAL CONTROL */}
+
+        <section className="cs-final-control">
+
+          <div>
+            <span>CYBERSTAT / FINAL 02</span>
+            <h2>THE FINAL IS LIVE.</h2>
+            <p>
+              Bitta qurilma — bitta ovoz. Ovozlar xavfsiz server orqali
+              qayd qilinadi.
+            </p>
+          </div>
+
+          <button
+            className="cs-main-button"
+            disabled={s.status!=='FAOL'}
+            onClick={openVoting}
+          >
+            <Vote/>
+            VOTE NOW
+            <ArrowRight/>
+          </button>
+
+        </section>
+
+      </main>
+
+      {voteOpen&&(
+        <VotingMenu
+          candidates={active}
+          status={s.status}
+          voted={voted}
+          onClose={()=>setVoteOpen(false)}
+          onSelect={c=>{
+            setSelected(c);
+            setVoteOpen(false);
+          }}
+        />
+      )}
+
+      {publicMenu==='candidates'&&(
+        <PublicCandidatesMenu
+          candidates={active}
+          total={total}
+          onClose={()=>setPublicMenu(null)}
+          onOpen={c=>{
+            setPublicMenu(null);
+            setSelected(c);
+          }}
+        />
+      )}
+
+      {publicMenu==='rating'&&(
+        <PublicRatingMenu
+          candidates={active}
+          total={total}
+          participants={data.participants}
+          onClose={()=>setPublicMenu(null)}
+        />
+      )}
+
+      {selected&&(
+        <CandidateDetail
+          c={selected}
+          onClose={()=>setSelected(null)}
+          onVote={()=>{
+            setVoteOpen(false);
+            setSelected(selected);
+          }}
+        />
+      )}
+
+      {selected&&voteOpen===false&&false}
+
+      <footer className="cs-footer">
+        <div>
+          <b>{s.footer_left||'CYBERSTAT FINAL ARENA'}</b>
+          <span>FINAL 02 / KIBERXAVFSIZLIK</span>
+        </div>
+
+        <div className="cs-footer-center">
+          <i/> SECURE • CENTRAL • REAL-TIME
+        </div>
+
+        <button className="admin-link" onClick={onAdmin}>
+          CONTROL CENTER
+        </button>
+      </footer>
+
+      {selected&&(
+        <Confirm
+          c={selected}
+          onClose={()=>setSelected(null)}
+          onConfirm={vote}
+        />
+      )}
+
+    </div>
+  );
 }
+
 function VotingMenu({candidates,status,voted,onClose,onSelect}){const closed=status!=='FAOL';return <div className="vote-menu-bg"><div className="vote-menu"><header><div><small>CYBERSTAT / SECURE BALLOT</small><h2>Finalistni tanlang</h2><p>Ovoz berish uchun quyidagi finalistlardan birini tanlang.</p></div><button onClick={onClose}><X/></button></header>{closed&&<div className="vote-menu-status">{status==='YAKUNLANGAN'?'Ovoz berish yakunlangan.':'Ovoz berish vaqtincha to‘xtatilgan.'}</div>}{voted&&<div className="vote-menu-status">Sizning ovozingiz allaqachon qayd etilgan.</div>}<div className="vote-menu-grid">{candidates.map((c,i)=><button className="vote-choice" key={c.id} onClick={()=>!closed&&!voted&&onSelect(c)} disabled={closed||voted}><div className="vote-menu-photo">{c.image_url?<img src={c.image_url} alt={c.author_name||c.name}/>:<div><ShieldCheck/></div>}<span>#{String(i+1).padStart(2,'0')}</span></div><div className="vote-choice-info"><small>{c.author_name||'Muallif'}</small><strong>{c.name}</strong><em>★ {Number(c.rating||0).toFixed(1)} / 5.0</em></div><ArrowRight/></button>)}</div><div className="vote-menu-footer"><span>1 QURILMA = 1 OVOZ</span><span>SECURE • CENTRAL • REAL-TIME</span></div></div></div>}
 function PublicCandidatesMenu({candidates,total,onClose,onOpen}){
   const active=candidates.filter(c=>c.active!==false);
@@ -196,7 +674,10 @@ function CandidateDetail({c,onClose,onVote}){
 
           <button
             className="primary candidate-detail-vote"
-            onClick={onVote}
+            onClick={()=>{
+              onClose();
+              onVote();
+            }}
           >
             <Vote/>
             OVOZ BERISH
