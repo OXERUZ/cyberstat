@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CYBERSTAT — Digital Competition Arena</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="header">
+<button class="brand" onclick="show('home')"><div class="shield">◆</div><div><strong id="brandName">CYBERSTAT</strong><small id="brandSub">DIGITAL COMPETITION ARENA</small></div></button>
+<nav class="nav">
+<button id="navHome" class="active" onclick="show('home')">⌂ &nbsp; Bosh sahifa</button>
+<button id="navF2" onclick="goArena()">◎ &nbsp; Final 2</button>
+<button id="navF1" onclick="show('final1')">Final 1 natijalari</button>
+<button onclick="goArena()">▥ &nbsp; Reyting</button>
+</nav>
+<div class="header-right"><div class="live"><i></i> JONLI</div><div class="time"><span id="clock">--:--:--</span><span class="date" id="date">--.--.----</span></div></div>
+</header>
+
+<section id="home" class="screen active">
+<div class="page">
+
+<div class="hero home-hero"><div class="hero-art"></div><div class="hero-copy home-hero-copy">
+<div class="kicker">KIBERXAVFSIZLIK MUSOBAQASI</div>
+<h1 class="brand-title">CYBER<span>STAT</span></h1>
+<div class="brand-sub">DIGITAL COMPETITION ARENA</div>
+<p class="home-desc">Yangi avlod kiberxavfsizlik mutaxassislarini aniqlash va rivojlantirish uchun tashkil etilgan professional final platformasi.</p>
+<div class="home-cta">
+<button class="btn-primary" onclick="goArena()">▶ FINAL 2 NI KUZATISH →</button>
+<button class="btn-outline" onclick="show('final1')">FINAL 1 NATIJALARI</button>
+</div>
+</div>
+<div class="stage"><h3>MUSOBAQA BOSQICHLARI</h3><div class="stage-row done"><div class="stage-dot">✓</div><div><strong>FINAL 1</strong><small>YAKUNLANDI</small></div><div class="stage-date">03.09.2025</div></div><div class="stage-row live"><div class="stage-dot">◎</div><div><strong>FINAL 2</strong><small>DAVOM ETMOQDA</small></div><div class="stage-date">10.09.2025</div></div><div class="stage-row"><div class="stage-dot">◇</div><div><strong>YAKUNIY NATIJA</strong><small>TEZ KUNDA</small></div><div class="stage-date">—</div></div></div></div>
+
+<div class="stats">
+<div class="stat-card green"><div class="stat-icon">✓</div><div><h4>FINAL 1<br>YAKUNLANDI</h4><p>Ovoz berish bosqichi tugadi</p></div></div>
+<div class="stat-card"><div class="stat-icon">▣</div><div><h4>OVOZ BERISH<br>YOPIQ</h4><p>Yangi ovozlar qabul qilinmaydi</p></div></div>
+<div class="stat-card gold"><div class="stat-icon" id="vipIcon">◆</div><div><h4>VIP NOMINANT</h4><p id="vipName">—</p></div></div>
+<div class="stat-card"><div class="stat-icon">◉</div><div><h4>FINAL 2<br>JONLI</h4><p>Yopiq cyber challenge</p></div></div>
+</div>
+
+<div class="arena-grid" id="arena">
+<div class="panel"><div class="panel-title"><div><div class="kicker">⌕ FINAL 02 / YOPIQ</div><h2>FINALISTLAR</h2><small>Faqat topshiriq bajarilish progressi ommaga ko‘rsatiladi.</small></div><div class="seal">▣ TOPSHIRIQLAR YOPIQ</div></div><div id="finalists" class="finalists"></div></div>
+
+<aside class="panel side"><div class="panel-title"><div><h2>FINAL 2</h2><small>TOPSHIRIQLAR PROGRESSI</small></div></div>
+<div class="ring-wrap"><div id="ring" class="ring"><span id="ringText">—</span></div><div class="ring-stats"><div><span>Bajarilgan topshiriqlar</span><b id="rDone">0</b></div><div><span>Qolgan topshiriqlar</span><b id="rRemain">10</b></div><div><span>Jami topshiriqlar</span><b>10</b></div></div></div>
+<div id="tasks" class="tasks"></div>
+<div class="locked"><strong>▣ TOPSHIRIQ MAZMUNI</strong><span id="publicLock">Public foydalanuvchilar uchun yopiq</span></div>
+</aside>
+</div>
+</div>
+<footer class="footer"><div><b>CYBERSTAT</b> • DIGITAL COMPETITION ARENA</div><div>XAVFSIZ • MARKAZLASHGAN • REAL VAQT</div></footer>
+</section>
+
+<section id="final1" class="screen">
+<div class="f1-shell">
+<div class="f1-panel">
+<div class="f1-top">
+<div><div class="f1-kicker">CYBERSTAT / FINALISTLAR</div><h1>Nomzodlar</h1><p>Barcha faol finalistlar haqida to‘liq ma'lumot.</p></div>
+<button class="f1-close" onclick="show('home')">✕</button>
+</div>
+<div id="f1Grid" class="f1-grid"></div>
+<div class="f1-bottom"><span id="f1Count">3 FINALIST</span><span>SECURE • CENTRAL • REAL-TIME</span></div>
+</div>
+</div>
+</section>
+
+<div class="modal" id="modal" onclick="if(event.target===this)closeModal()"><div class="modal-box"><button class="modal-close" onclick="closeModal()">×</button><div class="kicker">FINAL 2 / FINALIST PROFILI</div><h2 id="mn">—</h2><p id="mr">—</p><p class="modal-bio" id="mBio"></p><div class="modal-stats"><div><label>TOPSHIRIQ</label><b id="mt">—</b></div><div><label>PROGRESS</label><b id="mp">—</b></div><div><label>REYTING</label><b id="mk">—</b></div></div><div class="locked"><strong>▣ TOPSHIRIQ MAZMUNI YOPIQ</strong>Amaliy challenge tafsilotlari public foydalanuvchiga ko‘rsatilmaydi.</div></div></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="config.js"></script>
+<script src="app.js"></script>
+<script>
+renderPublic();
+renderFinal1();
+window.addEventListener("cyberstat:update",()=>{ renderPublic(); renderFinal1(); });
+initRemote();
+</script>
+</body>
+</html>
