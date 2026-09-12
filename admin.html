@@ -1,10 +1,86 @@
-<!doctype html><html lang="uz"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>CYBERSTAT — Admin Control</title><link rel="stylesheet" href="styles.css"></head><body>
-<header class="header"><button class="brand" onclick="location.href='index.html'"><div class="shield">◆</div><div><strong>CYBERSTAT</strong><small>ADMIN CONTROL CENTER</small></div></button><div class="header-right"><div class="live"><i></i> ADMIN ONLINE</div><div class="time"><span data-clock>--:--:--</span><span class="date" data-date>--.--.----</span></div></div></header>
-<div class="admin-wrap"><div class="head"><div><div class="kicker">CYBERSTAT / ADMINISTRATOR</div><h1>CONTROL<br><span>CENTER</span></h1></div><p>Finalistlar, 10 ta topshiriq progressi, Final 1 natijalari va public sahifa holatini bitta paneldan boshqaring.</p></div>
-<div class="admin-grid"><aside class="admin-side"><button class="active">◈ Dashboard</button><button onclick="document.getElementById('finalistPanel').scrollIntoView()">♙ Finalistlar</button><button onclick="document.getElementById('settingsPanel').scrollIntoView()">⚙ Sozlamalar</button><button onclick="document.getElementById('resultsPanel').scrollIntoView()">♜ Final 1 natijalari</button><button onclick="document.getElementById('dataPanel').scrollIntoView()">⇄ Ma’lumotlar</button><a href="index.html" style="display:block;padding:12px;color:#0dbbff;text-decoration:none;font-size:10px">↗ Public sayt</a></aside>
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CYBERSTAT — Admin Control</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="header">
+<button class="brand" onclick="location.href='index.html'"><div class="shield">◆</div><div><strong id="brandName">CYBERSTAT</strong><small>ADMIN CONTROL CENTER</small></div></button>
+<div class="header-right"><span id="authWho" class="admin-who"></span><button class="btn tiny logout-btn hidden" id="logoutBtn" onclick="adminLogout()">Chiqish</button><div class="live"><i></i> ADMIN ONLINE</div><div class="time"><span id="clock">--:--:--</span><span class="date" id="date">--.--.----</span></div></div>
+</header>
+
+<div class="auth-gate" id="authGate"></div>
+
+<div class="admin-wrap hidden" id="adminApp">
+<div class="head"><div><div class="kicker">CYBERSTAT / ADMINISTRATOR</div><h1>CONTROL<br><span>CENTER</span></h1></div><p>Finalistlar, har biri uchun 10 ta yopiq topshiriq progressi, VIP status, Final 1 natijalari va public sahifa holatini bitta paneldan boshqaring.</p></div>
+
+<div class="admin-grid">
+<aside class="admin-side">
+<button class="active">◈ Dashboard</button>
+<button onclick="document.getElementById('finalistPanel').scrollIntoView({behavior:'smooth'})">Finalistlar / Topshiriqlar</button>
+<button onclick="document.getElementById('settingsPanel').scrollIntoView({behavior:'smooth'})">Sozlamalar</button>
+<button onclick="document.getElementById('resultsPanel').scrollIntoView({behavior:'smooth'})">Final 1 natijalari</button>
+<button onclick="document.getElementById('dataPanel').scrollIntoView({behavior:'smooth'})">Ma'lumotlar</button>
+<a href="index.html" style="display:block;padding:12px;color:#0dbbff;text-decoration:none;font-size:10px">Public sayt →</a>
+</aside>
+
 <main class="admin-content">
-<section id="finalistPanel" class="admin-panel"><h2>Final 2 — Finalistlar</h2><p>Har bir finalist uchun progress 0–10 oralig‘ida. Public sahifa avtomatik shu ma’lumotni o‘qiydi.</p><div style="overflow:auto"><table class="admin-table"><thead><tr><th>№</th><th>ISHTIROKCHI</th><th>JAMOA</th><th>PROGRESS</th><th>VIP</th><th>AMAL</th></tr></thead><tbody id="aFinalists"></tbody></table></div></section>
-<section id="settingsPanel" class="admin-panel"><h2>Public sahifa sozlamalari</h2><p>Jonli holat va yopiq topshiriq siyosatini boshqaring.</p><div class="notice">Muhim: bu paket server-side autentifikatsiya emas. LocalStorage asosidagi admin prototipidir. Real internetdagi ko‘p foydalanuvchili production uchun Supabase/Firebase yoki boshqa backend ulanishi kerak.</div><div class="toolbar"><button class="btn" onclick="toggleSetting('live')">JONLI holat <span id="liveSwitch" class="switch"><i></i></span></button><button class="btn" onclick="toggleSetting('final2Open')">FINAL 2 ochiq <span id="f2Switch" class="switch"><i></i></span></button><button class="btn" onclick="toggleSetting('publicTasks')">Topshiriq mazmuni public <span id="taskSwitch" class="switch"><i></i></span></button></div><div class="form-grid" style="margin-top:18px"><div class="field"><label>HERO TITLE</label><input id="heroTitle"></div><div class="field"><label>HERO LINE</label><input id="heroLine"></div></div><div class="toolbar"><button class="btn primary" onclick="saveSettings()">Sozlamalarni saqlash</button></div></section>
-<section id="resultsPanel" class="admin-panel"><h2>Final 1 — Natijalar</h2><p>Yakuniy reytingni tahrirlang.</p><div style="overflow:auto"><table class="admin-table"><thead><tr><th>№</th><th>ISHTIROKCHI</th><th>BALL</th><th>HOLAT</th><th>AMAL</th></tr></thead><tbody id="aResults"></tbody></table></div></section>
-<section id="dataPanel" class="admin-panel"><h2>Ma’lumotlarni boshqarish</h2><p>Backup qilish yoki boshqa qurilmaga ko‘chirish uchun JSON export/import.</p><div class="toolbar"><button class="btn primary" onclick="exportData()">↓ JSON export</button><label class="btn">↑ JSON import <input type="file" accept="application/json" onchange="importData(this)" hidden></label><button class="btn danger" onclick="if(confirm('Barcha admin ma’lumotlari default holatga qaytarilsinmi?'))resetState()">Defaultga qaytarish</button></div></section>
-</main></div></div><div class="toast" id="toast"></div><script src="app.js"></script><script>renderAdmin();</script></body></html>
+
+<section id="finalistPanel" class="admin-panel">
+<h2>Final 2 — Finalistlar va 10 ta topshiriq</h2>
+<p>Bu ro‘yxat <b>avtomatik</b>: Final 1'da eng ko‘p ovoz olgan top-3 nomzod shu yerda Final 2 ishtirokchisi sifatida o‘zi paydo bo‘ladi — ism va rasm pastdagi "Final 1 — Nomzodlar" bo‘limidan o‘zi ko‘chib keladi. Loyiha nomi, tavsif, VIP status va 10 ta topshiriqni (bosib yoqing/o‘chiring) shu yerda alohida boshqarasiz. Progress avtomatik hisoblanadi va public sahifada faqat shu progress ko‘rinadi — topshiriq mazmuni hech qachon public tomonga chiqarilmaydi.</p>
+<div class="notice">Ishtirokchi qo‘shish/o‘chirish yoki tartibini o‘zgartirish uchun pastdagi <b>"Final 1 — Nomzodlar va natijalar"</b> bo‘limida nomzod qo‘shing, o‘chiring yoki ovoz sonini tahrirlang — top-3 shu zahoti yangilanadi.</div>
+<div id="aFinalists" style="margin-top:16px"></div>
+</section>
+
+<section id="settingsPanel" class="admin-panel">
+<h2>Public sahifa sozlamalari</h2>
+<p>Jonli holat, Final 2 ochiqligi va topshiriq mazmunini public qilish siyosatini boshqaring.</p>
+<div class="notice">Ma'lumotlar Supabase orqali markazlashgan holda saqlanadi — bu yerda qilingan har qanday o‘zgarish barcha tashrif buyuruvchilarga real vaqtda ko‘rinadi. Faqat login qilgan admin yoza oladi.</div>
+<div class="toolbar">
+<button class="btn" onclick="toggleSetting('live')">JONLI holat <span id="liveSwitch" class="switch"><i></i></span></button>
+<button class="btn" onclick="toggleSetting('final2Open')">FINAL 2 ochiq <span id="f2Switch" class="switch"><i></i></span></button>
+<button class="btn" onclick="toggleSetting('publicTasks')">Topshiriq mazmuni public <span id="taskSwitch" class="switch"><i></i></span></button>
+</div>
+<div class="form-grid" style="margin-top:18px">
+<div class="field"><label>SAYT NOMI</label><input id="siteName"></div>
+<div class="field"><label>SAYT SUBTITLE</label><input id="siteSubtitle"></div>
+<div class="field"><label>HERO TITLE</label><input id="heroTitle"></div>
+<div class="field"><label>HERO SUBTITLE</label><input id="heroSub"></div>
+<div class="field full"><label>HERO LINE</label><input id="heroLine"></div>
+</div>
+<div class="toolbar"><button class="btn primary" onclick="saveSettings()">Sozlamalarni saqlash</button></div>
+</section>
+
+<section id="resultsPanel" class="admin-panel">
+<h2>Final 1 — Nomzodlar va natijalar</h2>
+<p>Har bir nomzod uchun rasm, loyiha nomi, tavsif, reyting va ovozlar sonini boshqaring. Foiz ovozlar asosida avtomatik hisoblanadi va "Nomzodlar" public sahifasida shu tartibda (ko‘p ovozdan kamiga) chiqadi.</p>
+<div id="aCandidates"></div>
+<div class="toolbar"><button class="btn primary" onclick="addCandidate()">+ Yangi nomzod qo‘shish</button></div>
+</section>
+
+<section id="dataPanel" class="admin-panel">
+<h2>Ma'lumotlarni boshqarish</h2>
+<p>Backup qilish yoki boshqa qurilmaga ko‘chirish uchun JSON export/import.</p>
+<div class="toolbar">
+<button class="btn primary" onclick="exportData()">↓ JSON export</button>
+<label class="btn">↑ JSON import <input type="file" accept="application/json" onchange="importData(this)" hidden></label>
+<button class="btn danger" onclick="if(confirm('Barcha admin ma\'lumotlari default holatga qaytarilsinmi?'))resetState()">Defaultga qaytarish</button>
+</div>
+</section>
+
+</main>
+</div>
+</div>
+
+<div class="toast" id="toast"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="config.js"></script>
+<script src="app.js"></script>
+<script>initAdminAuth();</script>
+</body>
+</html>
