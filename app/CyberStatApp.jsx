@@ -15,21 +15,176 @@ export default function CyberStatApp(){const [mode,setMode]=useState(typeof wind
 
 function PublicApp({onAdmin}){
  const [data,setData]=useState({candidates:[],settings:FALLBACK,participants:0}),[loading,setLoading]=useState(true),[error,setError]=useState(''),[selected,setSelected]=useState(null),[voteOpen,setVoteOpen]=useState(false),[voted,setVoted]=useState(false),[notice,setNotice]=useState(''),[syncAt,setSyncAt]=useState(null);
- const sync=useCallback(async()=>{try{const d=await publicState();setData(d);setSyncAt(new Date());setError('')}catch(e){console.error(e);setError(errText(e))}finally{setLoading(false)}},[]);
- useEffect(()=>{sync();const ch=supabase.channel('cyberstat-public-live').on('postgres_changes',{event:'*',schema:'public',table:'candidates'},sync).on('postgres_changes',{event:'*',schema:'public',table:'survey_settings'},sync).on('postgres_changes',{event:'*',schema:'public',table:'survey_stats'},sync).subscribe();return()=>supabase.removeChannel(ch)},[sync]);
- const total=useMemo(()=>data.candidates.reduce((a,c)=>a+Number(c.votes||0),0),[data.candidates]);
+
+ const sync=useCallback(async()=>{
+  try{
+   const d=await publicState();
+   setData(d);
+   setSyncAt(new Date());
+   setError('');
+  }catch(e){
+   console.error(e);
+   setError(errText(e));
+  }finally{
+   setLoading(false);
+  }
+ },[]);
+
+ useEffect(()=>{
+  sync();
+  const ch=supabase.channel('cyberstat-public-live')
+   .on('postgres_changes',{event:'*',schema:'public',table:'candidates'},sync)
+   .on('postgres_changes',{event:'*',schema:'public',table:'survey_settings'},sync)
+   .on('postgres_changes',{event:'*',schema:'public',table:'survey_stats'},sync)
+   .subscribe();
+  return()=>supabase.removeChannel(ch);
+ },[sync]);
+
  const openVoting=()=>setVoteOpen(true);
- const vote=async()=>{if(!selected||voted||data.settings.status!=='FAOL')return;try{await voterSession();const {data:r,error:e}=await supabase.rpc('cast_vote',{p_candidate_id:selected.id});if(e)throw e;if(!r?.ok)throw new Error('VOTE_NOT_CONFIRMED');setVoted(true);setSelected(null);setNotice('Ovozingiz muvaffaqiyatli qayd etildi.');await sync()}catch(e){setNotice(String(e?.message||'').includes('ALREADY_VOTED')?'Siz avval ovoz bergansiz.':'Ovoz qabul qilinmadi: '+errText(e))}};
- if(loading)return <Loading/>; const s=data.settings||FALLBACK,closed=s.status==='YAKUNLANGAN',visible=s.results_visible!==false;
- return <div className="app"><CyberBg/><header className="nav"><div className="logo"><span><ShieldCheck/></span><b>{s.project_name||'CYBERSTAT'}</b><small>FINAL ARENA</small></div><div className="nav-live"><i/> {closed?'FINAL CLOSED':'LIVE ARENA'}</div><nav><a href="#arena">ARENA</a><a href="#finalists">FINALISTLAR</a>{visible&&<a href="#ranking">REYTING</a>}</nav><button className="nav-btn" onClick={openVoting}><Vote/> OVOZ BERISH</button></header>
- {error&&<div className="alert error"><span>{error}</span><button onClick={sync}><RefreshCw/> QAYTA URINISH</button></div>}{notice&&<div className="alert success"><Check/><span>{notice}</span><button onClick={()=>setNotice('')}><X/></button></div>}
- <main><section id="arena" className="arena"><div className="arena-copy"><div className="kicker"><span>● {s.site_badge||'FINAL EVENT'}</span><em>{closed?'FINAL YAKUNLANDI':s.status==='TOXTATILGAN'?'VAQTINCHA TO‘XTATILGAN':'LIVE VOTING'}</em></div><h1>{s.project_name||'CYBERSTAT'}<br/><strong>FINAL BOSQICHI</strong></h1><p>{s.hero_description||'Yakuniy bosqichda o‘zingiz munosib deb bilgan finalistga ovoz bering.'}</p><div className="hero-actions"><button className="primary" disabled={s.status!=='FAOL'} onClick={openVoting}><Zap/> {closed?'FINAL YAKUNLANGAN':s.status==='TOXTATILGAN'?'OVOZ BERISH TO‘XTATILGAN':'OVOZ BERISH'} <ArrowRight/></button><span className="sync-label"><i/> SERVER {syncAt?'SINXRON':'ULANISH'}</span></div></div><ArenaPanel candidates={data.candidates} total={total} settings={s}/></section>
- <section className="metrics"><Metric label="JAMI OVOZ" value={total}/><Metric label="ISHTIROKCHI" value={data.participants}/><Metric label="FINALIST" value={data.candidates.length}/><Metric label="HOLAT" value={closed?'CLOSED':s.status==='TOXTATILGAN'?'PAUSE':'LIVE'}/></section>
- <section id="finalists" className="section"><SectionHead eyebrow={`FINALISTS / ${String(data.candidates.length).padStart(2,'0')}`} title="Finalistlar" text="Har bir loyiha uchun muallif, logo, tavsif, reyting va joriy ovozlar."/><div className="cards">{data.candidates.map((c,i)=><Candidate key={c.id} c={c} rank={i+1} total={total} disabled={voted||s.status!=='FAOL'} select={()=>setSelected(c)}/>)}</div></section>
- {visible&&<section id="ranking" className="ranking section"><SectionHead eyebrow="LIVE RANKING" title="Jonli reyting" text="Markaziy serverdagi joriy ovozlar asosida."/><div className="rank-list">{data.candidates.map((c,i)=><RankRow key={c.id} c={c} rank={i+1} total={total}/>)}</div></section>}
- {closed&&<Podium candidates={data.candidates}/>}<div className="public-note">{s.public_notice||'Ommaga faqat finalistlarning loyiha ma’lumotlari, reytingi, ovozlari va joriy o‘rni ko‘rsatiladi.'}</div></main>
- {voteOpen&&<VotingMenu candidates={data.candidates} status={s.status} voted={voted} onClose={()=>setVoteOpen(false)} onSelect={c=>{setSelected(c);setVoteOpen(false)}}/>}
- <footer><span>{s.footer_left||'CYBERSTAT FINAL ARENA'}</span><span>{s.footer_right||'SECURE • CENTRAL • REAL-TIME'}</span><button className="admin-link" onClick={onAdmin}>ADMIN</button></footer>{selected&&<Confirm c={selected} onClose={()=>setSelected(null)} onConfirm={vote}/>}</div>
+
+ const vote=async()=>{
+  if(!selected||voted||data.settings.status!=='FAOL')return;
+  try{
+   await voterSession();
+   const {data:r,error:e}=await supabase.rpc('cast_vote',{p_candidate_id:selected.id});
+   if(e)throw e;
+   if(!r?.ok)throw new Error('VOTE_NOT_CONFIRMED');
+   setVoted(true);
+   setSelected(null);
+   setNotice('Ovozingiz muvaffaqiyatli qayd etildi.');
+   await sync();
+  }catch(e){
+   setNotice(
+    String(e?.message||'').includes('ALREADY_VOTED')
+     ? 'Siz avval ovoz bergansiz.'
+     : 'Ovoz qabul qilinmadi: '+errText(e)
+   );
+  }
+ };
+
+ if(loading)return <Loading/>;
+
+ const s=data.settings||FALLBACK;
+ const closed=s.status==='YAKUNLANGAN';
+
+ return <div className="app">
+  <CyberBg/>
+
+  <header className="nav">
+   <div className="logo">
+    <span><ShieldCheck/></span>
+    <b>{s.project_name||'CYBERSTAT'}</b>
+    <small>FINAL ARENA</small>
+   </div>
+
+   <div className="nav-live">
+    <i/> {closed?'FINAL CLOSED':'LIVE ARENA'}
+   </div>
+
+   <nav>
+    <a href="#arena">ARENA</a>
+   </nav>
+
+   <button className="nav-btn" onClick={openVoting}>
+    <Vote/> OVOZ BERISH
+   </button>
+  </header>
+
+  {error&&
+   <div className="alert error">
+    <span>{error}</span>
+    <button onClick={sync}><RefreshCw/> QAYTA URINISH</button>
+   </div>
+  }
+
+  {notice&&
+   <div className="alert success">
+    <Check/>
+    <span>{notice}</span>
+    <button onClick={()=>setNotice('')}><X/></button>
+   </div>
+  }
+
+  <main>
+   <section id="arena" className="arena">
+    <div className="arena-copy">
+     <div className="kicker">
+      <span>● {s.site_badge||'FINAL EVENT'}</span>
+      <em>
+       {closed
+        ? 'FINAL YAKUNLANDI'
+        : s.status==='TOXTATILGAN'
+         ? 'VAQTINCHA TO‘XTATILGAN'
+         : 'LIVE VOTING'}
+      </em>
+     </div>
+
+     <h1>
+      {s.project_name||'CYBERSTAT'}
+      <br/>
+      <strong>FINAL BOSQICHI</strong>
+     </h1>
+
+     <p>
+      {s.hero_description||'Yakuniy bosqichda o‘zingiz munosib deb bilgan finalistga ovoz bering.'}
+     </p>
+
+     <div className="hero-actions">
+      <button
+       className="primary"
+       disabled={s.status!=='FAOL'}
+       onClick={openVoting}
+      >
+       <Zap/>
+       {closed
+        ? 'FINAL YAKUNLANGAN'
+        : s.status==='TOXTATILGAN'
+         ? 'OVOZ BERISH TO‘XTATILGAN'
+         : 'OVOZ BERISH'}
+       <ArrowRight/>
+      </button>
+
+      <span className="sync-label">
+       <i/> SERVER {syncAt?'SINXRON':'ULANISH'}
+      </span>
+     </div>
+    </div>
+
+    <ArenaPanel settings={s}/>
+   </section>
+
+   <div className="public-note">
+    {s.public_notice||'Ovoz berish markaziy server orqali xavfsiz tarzda amalga oshiriladi.'}
+   </div>
+  </main>
+
+  {voteOpen&&
+   <VotingMenu
+    candidates={data.candidates}
+    status={s.status}
+    voted={voted}
+    onClose={()=>setVoteOpen(false)}
+    onSelect={c=>{
+     setSelected(c);
+     setVoteOpen(false);
+    }}
+   />
+  }
+
+  <footer>
+   <span>{s.footer_left||'CYBERSTAT FINAL ARENA'}</span>
+   <span>{s.footer_right||'SECURE • CENTRAL • REAL-TIME'}</span>
+   <button className="admin-link" onClick={onAdmin}>ADMIN</button>
+  </footer>
+
+  {selected&&
+   <Confirm
+    c={selected}
+    onClose={()=>setSelected(null)}
+    onConfirm={vote}
+   />
+  }
+ </div>
 }
 function VotingMenu({candidates,status,voted,onClose,onSelect}){const closed=status!=='FAOL';return <div className="vote-menu-bg"><div className="vote-menu"><header><div><small>CYBERSTAT / SECURE BALLOT</small><h2>Finalistni tanlang</h2><p>Ovoz berish uchun quyidagi finalistlardan birini tanlang.</p></div><button onClick={onClose}><X/></button></header>{closed&&<div className="vote-menu-status">{status==='YAKUNLANGAN'?'Ovoz berish yakunlangan.':'Ovoz berish vaqtincha to‘xtatilgan.'}</div>}{voted&&<div className="vote-menu-status">Sizning ovozingiz allaqachon qayd etilgan.</div>}<div className="vote-menu-grid">{candidates.map((c,i)=><button className="vote-choice" key={c.id} onClick={()=>!closed&&!voted&&onSelect(c)} disabled={closed||voted}><div className="vote-menu-photo">{c.image_url?<img src={c.image_url} alt={c.author_name||c.name}/>:<div><ShieldCheck/></div>}<span>#{String(i+1).padStart(2,'0')}</span></div><div className="vote-choice-info"><small>{c.author_name||'Muallif'}</small><strong>{c.name}</strong><em>★ {Number(c.rating||0).toFixed(1)} / 5.0</em></div><ArrowRight/></button>)}</div><div className="vote-menu-footer"><span>1 QURILMA = 1 OVOZ</span><span>SECURE • CENTRAL • REAL-TIME</span></div></div></div>}
 function ArenaPanel({candidates,total,settings}){const leader=candidates[0],end=settings.countdown_end?new Date(settings.countdown_end):null;return <div className="arena-panel"><div className="panel-top"><span><i/> LIVE ARENA</span><Countdown end={end} closed={settings.status==='YAKUNLANGAN'}/></div><div className="radar"><div className="radar-ring r1"/><div className="radar-ring r2"/><div className="radar-core"><Trophy/><b>{leader?'#01':'—'}</b><small>LEADER</small></div></div>{leader?<div className="panel-leader"><small>HOZIRGI YETAKCHI</small><strong>{leader.name}</strong><span>{fmt(leader.votes)} OVOZ • {pct(leader.votes,total).toFixed(1)}%</span></div>:<div className="empty">Finalistlar hali kiritilmagan.</div>}</div>}
@@ -68,5 +223,5 @@ function AdminContent({settings,busy,onSave}){const [d,setD]=useState(settings);
 function AdminSystem({settings,busy,onSave}){const [d,setD]=useState(settings);useEffect(()=>setD(settings),[settings]);return <div><AdminTitle eyebrow="FINAL CONTROL" title="Final boshqaruvi" text="Ovoz berishni oching, to‘xtating yoki yakunlang. Natijalar va countdownni ham shu yerdan boshqaring."/><div className="system-panel"><label>Holat<select value={d.status} onChange={e=>setD({...d,status:e.target.value})}><option>FAOL</option><option>TOXTATILGAN</option><option>YAKUNLANGAN</option></select></label><label>Natijalarni ommaga ko‘rsatish<select value={d.results_visible?'true':'false'} onChange={e=>setD({...d,results_visible:e.target.value==='true'})}><option value="true">Ha</option><option value="false">Yo‘q</option></select></label><label>Countdown tugash vaqti<input type="datetime-local" value={d.countdown_end?new Date(d.countdown_end).toISOString().slice(0,16):''} onChange={e=>setD({...d,countdown_end:e.target.value?new Date(e.target.value).toISOString():null})}/></label><div className="status-grid"><div><b>FAOL</b><span>Ovoz qabul qilinadi</span></div><div><b>TOXTATILGAN</b><span>Vaqtincha ovoz yopiladi</span></div><div><b>YAKUNLANGAN</b><span>Podium ko‘rsatiladi</span></div></div><button className="primary" disabled={busy} onClick={()=>onSave(d)}>FINAL SOZLAMALARINI SAQLASH</button></div></div>}
 function AdminLogs({logs}){return <div><AdminTitle eyebrow="AUDIT TRAIL" title="O‘zgarishlar tarixi" text="Bu ma’lumotlar faqat administrator uchun ko‘rinadi."/><div className="logs">{logs.map(l=><div key={l.id}><span>{new Date(l.created_at).toLocaleString('uz-UZ')}</span><b>{l.action}</b><strong>{l.target||'—'}</strong><p>{l.detail||''}</p></div>)}</div></div>}
 function AdminTitle({eyebrow,title,text}){return <div className="admin-title"><small>{eyebrow}</small><h1>{title}</h1><p>{text}</p></div>}
-function CandidateEditor({c,setC,onClose,onSave,busy}){return <div className="modal-bg"><div className="modal editor"><button onClick={onClose}><X/></button><small>FINALIST CONFIG / MEDIA</small><h2>{c.id?'Finalistni tahrirlash':'Yangi finalist'}</h2><input placeholder="Loyiha nomi" value={c.name} onChange={e=>setC({...c,name:e.target.value})}/><input placeholder="Loyiha muallifi" value={c.author_name||''} onChange={e=>setC({...c,author_name:e.target.value})}/><textarea placeholder="Loyiha tavsifi" value={c.bio} onChange={e=>setC({...c,bio:e.target.value})}/><label>Reyting: {Number(c.rating||0).toFixed(1)} / 5.0<input type="range" min="0" max="5" step="0.1" value={c.rating||0} onChange={e=>setC({...c,rating:e.target.value})}/></label><div className="media-grid"><label className="file-box"><ImagePlus/><span>Muallif rasmi</span><small>{c.author_file?c.author_file.name:(c.image_url?'Mavjud rasmni saqlash':'Rasm tanlang')}</small><input type="file" accept="image/png,image/jpeg,image/webp" onChange={e=>setC({...c,author_file:e.target.files?.[0]||null})}/></label><label className="file-box"><ImagePlus/><span>Loyiha logosi</span><small>{c.logo_file?c.logo_file.name:(c.project_logo_url?'Mavjud logo saqlanadi':'Logo tanlang')}</small><input type="file" accept="image/png,image/jpeg,image/webp" onChange={e=>setC({...c,logo_file:e.target.files?.[0]||null})}/></label></div>{(c.author_file||c.image_url)&&<div className="editor-preview"><div>{c.author_file?<span>{c.author_file.name}</span>:<img src={c.image_url} alt=""/>}<small>MUALLIF</small></div>{(c.logo_file||c.project_logo_url)&&<div>{c.logo_file?<span>{c.logo_file.name}</span>:<img src={c.project_logo_url} alt=""/>}<small>LOGO</small></div>}</div>}<label className="switch"><input type="checkbox" checked={!!c.active} onChange={e=>setC({...c,active:e.target.checked})}/> FAOL</label><div><button className="secondary" onClick={onClose}>BEKOR</button><button className="primary" disabled={busy} onClick={()=>onSave(c)}><Check/> SAQLASH</button></div></div></div>}
+function CandidateEditor({c,setC,onClose,onSave,busy}){return <div className="modal-bg"><div className="modal editor"><button onClick={onClose}><X/></button><small>FINALIST CONFIG / MEDIA</small><h2>{c.id?'Finalistni tahrirlash':'Yangi finalist'}</h2><input placeholder="Loyiha nomi" value={c.name} onChange={e=>setC({...c,name:e.target.value})}/><input placeholder="Loyiha muallifi" value={c.author_name||''} onChange={e=>setC({...c,author_name:e.target.value})}/><textarea placeholder="Loyiha tavsifi" value={c.bio} onChange={e=>setC({...c,bio:e.target.value})}/><div className="media-grid"><label className="file-box"><ImagePlus/><span>Muallif rasmi</span><small>{c.author_file?c.author_file.name:(c.image_url?'Mavjud rasmni saqlash':'Rasm tanlang')}</small><input type="file" accept="image/png,image/jpeg,image/webp" onChange={e=>setC({...c,author_file:e.target.files?.[0]||null})}/></label><label className="file-box"><ImagePlus/><span>Loyiha logosi</span><small>{c.logo_file?c.logo_file.name:(c.project_logo_url?'Mavjud logo saqlanadi':'Logo tanlang')}</small><input type="file" accept="image/png,image/jpeg,image/webp" onChange={e=>setC({...c,logo_file:e.target.files?.[0]||null})}/></label></div>{(c.author_file||c.image_url)&&<div className="editor-preview"><div>{c.author_file?<span>{c.author_file.name}</span>:<img src={c.image_url} alt=""/>}<small>MUALLIF</small></div>{(c.logo_file||c.project_logo_url)&&<div>{c.logo_file?<span>{c.logo_file.name}</span>:<img src={c.project_logo_url} alt=""/>}<small>LOGO</small></div>}</div>}<label className="switch"><input type="checkbox" checked={!!c.active} onChange={e=>setC({...c,active:e.target.checked})}/> FAOL</label><div><button className="secondary" onClick={onClose}>BEKOR</button><button className="primary" disabled={busy} onClick={()=>onSave(c)}><Check/> SAQLASH</button></div></div></div>}
 function AdjustModal({a,setA,onClose,onSave,busy}){return <div className="modal-bg"><div className="modal"><button onClick={onClose}><X/></button><small>SECURE VOTE ADJUSTMENT</small><h2>{a.name}</h2><div className="adjust-grid"><button onClick={()=>setA({...a,delta:Number(a.delta||0)+1})}>+1</button><button onClick={()=>setA({...a,delta:Number(a.delta||0)-1})}>−1</button><input type="number" value={a.delta} onChange={e=>setA({...a,delta:e.target.value})}/></div><textarea placeholder="O‘zgarish sababi — majburiy" value={a.reason} onChange={e=>setA({...a,reason:e.target.value})}/><p className="warning">Sabab audit logga yoziladi. O‘zgarish public reytingga real vaqtda tarqaladi.</p><div><button className="secondary" onClick={onClose}>BEKOR</button><button className="primary" disabled={busy} onClick={onSave}><Check/> TASDIQLASH</button></div></div></div>}
