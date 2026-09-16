@@ -28,7 +28,12 @@ export default function Home() {
       <div className="container"><div className="stats"><div className="stat"><strong>03</strong><span>Asosiy IT yo‘nalish</span></div><div className="stat"><strong>100%</strong><span>Amaliy yondashuv</span></div><div className="stat"><strong>REAL</strong><span>Loyihalar bilan o‘qish</span></div><div className="stat"><strong>CAREER</strong><span>Kasbiy rivojlanish</span></div></div></div>
 
       <section className="section section-tight" id="why"><div className="container split"><div className="sticky-title"><div className="eyebrow">01 / NOVA PHILOSOPHY</div><h2 className="h2">Faqat kurs emas — <span className="accent">kasb.</span></h2><p className="muted">Nova Academy o‘quvchini darsni ko‘rgan emas, bilimini amalda qo‘llay oladigan mutaxassisga aylantirish uchun qurilgan.</p><a className="text-link" href="#system">Tizimni ko‘rish <ArrowRight size={15}/></a></div>
-        <div className="features">{[["01","Amaliy ta’lim","Har bir mavzu topshiriq, mini-project va real vaziyat bilan mustahkamlanadi.",Zap],["02","Professional mentorlar","Tajriba va feedback orqali tezroq o‘sish uchun individual yo‘nalish.",Users],["03","Portfolio","GitHub, loyiha va case'lar orqali ko‘rsatish mumkin bo‘lgan natija.",Terminal],["04","Career support","CV, interview va ishga tayyorgarlik bo‘yicha yo‘naltirish.",Trophy]].map(([n,t,d,I])=>{const Icon=I as typeof Zap;return <div className="feature feature-rich" key={n}><div className="feature-top"><span className="feature-num">{n}</span><Icon size={19}/></div><h3>{t as string}</h3><p className="muted">{d as string}</p></div>})}</div>
+        <div className="features">{([
+["01","Amaliy ta’lim","Har bir mavzu topshiriq, mini-project va real vaziyat bilan mustahkamlanadi.",Zap],
+["02","Professional mentorlar","Tajriba va feedback orqali tezroq o‘sish uchun individual yo‘nalish.",Users],
+["03","Portfolio","GitHub, loyiha va case'lar orqali ko‘rsatish mumkin bo‘lgan natija.",Terminal],
+["04","Career support","CV, interview va ishga tayyorgarlik bo‘yicha yo‘naltirish.",Trophy],
+] as const).map(([n,t,d,Icon])=><div className="feature feature-rich" key={n}><div className="feature-top"><span className="feature-num">{n}</span><Icon size={19}/></div><h3>{t}</h3><p className="muted">{d}</p></div>)}</div>
       </div></section>
 
       <section className="section" id="courses"><div className="container"><div className="section-head"><div><div className="eyebrow">02 / YO‘NALISHLAR</div><h2 className="h2">IT olamida o‘z <span className="accent">yo‘lingizni</span> tanlang.</h2></div><p className="muted section-note">Boshlang‘ich bilimdan real loyiha va portfolio yaratishgacha.</p></div>
