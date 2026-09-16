@@ -1,0 +1,1 @@
+export type Course={id:string;number:string;title:string;description:string;technologies:string[];icon:string;details:{about:string;who:string;level:string;duration:string;format:string;learning:string[];projects:string[];result:string;career:string[]}};
